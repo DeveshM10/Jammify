@@ -109,8 +109,20 @@ def update_tempo(settings: TempoSettings):
 
 #@app.get("/play_step")
 @app.post("/play_step")
+@app.post("/play_step")
 def play_step(chords: list[Chord]):
 
+    print("RECEIVED:", chords)
+
+    return {
+        "message": "received",
+        "chords": chords
+    }
+
+'''
+def play_step(chords: list[Chord]):
+
+    print("RECEIVED:", chords)
     threads = []
 
     for chord in chords:
@@ -136,3 +148,4 @@ def play_step(chords: list[Chord]):
     return {
         "message": "finished"
     }
+'''

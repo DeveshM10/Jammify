@@ -17,7 +17,9 @@
     "@mui/icons-material": "^9.2.0",
     "@mui/material": "^9.2.0",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "tonal": "^6.4.3",
+    "tone": "^15.1.22"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

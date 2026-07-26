@@ -15,6 +15,16 @@ import IconButton from "@mui/material/IconButton";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 
 
+import {
+    chordToMidi
+} from "./chords";
+
+import {
+    unlockAudio,
+    playChord
+} from "./audio";
+
+
 const instruments = [
     "acoustic_grand_piano",
     "electric_grand_piano",
@@ -45,6 +55,7 @@ function App() {
 
     // render
     const API_URL = "https://jammify-3.onrender.com";
+    
  
 
   const [open, setOpen] = useState(false);
@@ -252,12 +263,6 @@ const editChordData = () => {
 
 
 
-  const playChord = async (chord) => {
-    await fetch(
-      // `http://localhost:8000/play?chord=${chord}&mode=${modeRef.current}`
-      `${API_URL}/play?chord=${chord}&mode=${modeRef.current}`
-    );
-  };
 
 const saveTempo = async () => {
     const finalBpm = Math.min(
@@ -290,24 +295,29 @@ const saveTempo = async () => {
 
 
 
+const playStep = async (chords)=>{
 
-const playStep = async (chords) => {
 
-    if (chords.length === 0)
-        return;
+    chords.forEach(chord=>{
 
-    abortControllerRef.current = new AbortController();
 
-    // await fetch("http://localhost:8000/play_step", {
-    await fetch(`${API_URL}/play_step`, {
+        const midiNotes =
+            chordToMidi(
+                chord.name,
+                chord.octave
+            );
 
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(chords),
-        signal: abortControllerRef.current.signal
+
+        playChord(
+            midiNotes,
+            chord.beats,
+            bpmRef.current,
+            chord.volume
+        );
+
+
     });
+
 
 };
 
@@ -350,7 +360,6 @@ const playAllTracks = async () => {
 
   if (playingRef.current)
     return;
-
 
 
   playingRef.current = true;
@@ -448,6 +457,13 @@ const playAllTracks = async () => {
 };
 
 
+const startPlayback = async () => {
+
+    await unlockAudio();
+
+    playAllTracks();
+
+};
 
 
 
@@ -553,7 +569,9 @@ const stopProgression = () => {
             }
 
 
-            onClick={playAllTracks}
+            // onClick={playAllTracks}
+            onClick={startPlayback}
+
 
           >
 

@@ -6,7 +6,8 @@ import time
 
 
 fs = fluidsynth.Synth()
-fs.start(driver="pulseaudio")
+#fs.start(driver="pulseaudio")
+fs.start()
 
 sfid = fs.sfload(
     "soundfonts/FluidR3_GM.sf2"
