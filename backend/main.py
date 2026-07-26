@@ -30,6 +30,11 @@ app.add_middleware(
 )
 
 
+@app.get("/")
+def root():
+    return {"message": "Jammify API is running"}
+
+
 @app.get("/play")
 def play(chord: str, mode: str = "normal"):
 
