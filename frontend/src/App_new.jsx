@@ -43,6 +43,10 @@ function App() {
   };
 
 
+    // render
+    const API_URL = "https://jammify-3.onrender.com";
+ 
+
   const [open, setOpen] = useState(false);
   const [tracks, setTracks] = useState([]);
   const [selectedTrack, setSelectedTrack] = useState(null);
@@ -250,7 +254,8 @@ const editChordData = () => {
 
   const playChord = async (chord) => {
     await fetch(
-      `http://localhost:8000/play?chord=${chord}&mode=${modeRef.current}`
+      // `http://localhost:8000/play?chord=${chord}&mode=${modeRef.current}`
+      `${API_URL}/play?chord=${chord}&mode=${modeRef.current}`
     );
   };
 
@@ -268,7 +273,8 @@ const saveTempo = async () => {
     setBpm(finalBpm);
     setBeatsPerBar(finalBeats);
 
-    await fetch("http://localhost:8000/tempo", {
+    // await fetch("http://localhost:8000/tempo", {
+    await fetch(`${API_URL}/tempo`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
@@ -292,7 +298,9 @@ const playStep = async (chords) => {
 
     abortControllerRef.current = new AbortController();
 
-    await fetch("http://localhost:8000/play_step", {
+    // await fetch("http://localhost:8000/play_step", {
+    await fetch(`${API_URL}/play_step`, {
+
         method: "POST",
         headers: {
             "Content-Type": "application/json"
