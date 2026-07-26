@@ -1,7 +1,7 @@
 # instrument.py
 
 from metronome import beat_duration, musical_duration
-from mingus.midi import fluidsynth
+import fluidsynth
 import time
 
 
