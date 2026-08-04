@@ -97,11 +97,15 @@ function App() {
 
   const [bpm, setBpm] = useState(120);
   const bpmRef = useRef(120);
+  const beatsPerBarRef = useRef(4);
 
     useEffect(() => {
     bpmRef.current = bpm;
     }, [bpm]);
 
+    useEffect(() => {
+        beatsPerBarRef.current = beatsPerBar;
+    }, [beatsPerBar]);
 
 const updateTrackVolume = (id, volume) => {
     setTracks(prev =>
@@ -406,42 +410,43 @@ const playAllTracks = async () => {
     );
 
 
-    // Only move playhead when there is sound
-    if (chordsAtStep.length > 0) {
-        await playStep(chordsAtStep);
-
-        const maxBeats = Math.max(
-            ...chordsAtStep.map(c => c.beats),
-            1
-        );
-
-        await sleep((60 / bpmRef.current) * maxBeats * 1000);
-    } else {
-        await sleep(50);
-    }
-
-
 
     console.log("STEP:", step, chordsAtStep);
 
 
     try {
 
-            if (chordsAtStep.length > 0) {
+    if (chordsAtStep.length > 0) {
 
-                stopAllNotes();
+        const repetitions = Math.max(
+            1,
+            Math.floor(
+                beatsPerBarRef.current /
+                chordsAtStep[0].beats
+            )
+        );
 
-                await playStep(chordsAtStep);
 
-            }
+        for (let i = 0; i < repetitions; i++) {
+
+            stopAllNotes();
+
+            await playStep(chordsAtStep);
 
             await sleep(
                 (60 / bpmRef.current) * 1000
             );
 
-            // step timing
+        }
 
-            }
+    }
+    else {
+
+        await sleep(50);
+
+    }
+
+    }
     catch(error){
 
     if(error.name === "AbortError"){
