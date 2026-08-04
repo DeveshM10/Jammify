@@ -147,16 +147,16 @@ export async function playNote(
 
     const gain = new Tone.Gain(volume).toDestination();
 
-sampler.connect(gain);
+    sampler.connect(gain);
 
-sampler.triggerAttackRelease(
-    midiToNote(midi),
-    duration
-);
+    sampler.triggerAttackRelease(
+        midiToNote(midi),
+        duration
+    );
 
-setTimeout(() => {
-    gain.dispose();
-}, duration * 1000);
+    setTimeout(() => {
+        gain.dispose();
+    }, duration * 1000);
 
 }
 
