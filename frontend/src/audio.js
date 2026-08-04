@@ -1,129 +1,194 @@
-let audioContext = null;
+import * as Tone from "tone";
 
-let activeOscillators = [];
+let instruments = {};
+let initialized = false;
 
 
-function getAudioContext() {
-    if (!audioContext) {
-        audioContext = new AudioContext();
+const instrumentUrls = {
+
+    acoustic_grand_piano: {
+        "C4": "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        "A4": "A4.mp3",
+    },
+
+    electric_grand_piano: {
+        "C4": "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        "A4": "A4.mp3",
+    },
+
+    church_organ: {
+        "C4": "C4.mp3",
+        "F4": "F4.mp3",
+        "A4": "A4.mp3",
+    },
+
+    finger_bass: {
+        "E2": "E2.mp3",
+        "A2": "A2.mp3",
+        "D3": "D3.mp3",
+        "G3": "G3.mp3",
     }
 
-    return audioContext;
+};
+
+
+
+const baseUrls = {
+
+    acoustic_grand_piano:
+        "https://tonejs.github.io/audio/salamander/",
+
+    electric_grand_piano:
+        "https://tonejs.github.io/audio/salamander/",
+
+    church_organ:
+        "https://tonejs.github.io/audio/Organ/",
+
+    finger_bass:
+        "https://tonejs.github.io/audio/bass-electric/"
+
+};
+
+
+
+async function loadInstrument(name) {
+
+    if (instruments[name]) {
+        return instruments[name];
+    }
+
+
+    const sampler =
+        new Tone.Sampler({
+
+            urls:
+                instrumentUrls[name] ||
+                instrumentUrls.acoustic_grand_piano,
+
+            baseUrl:
+                baseUrls[name] ||
+                baseUrls.acoustic_grand_piano
+
+        }).toDestination();
+
+
+
+    await Tone.loaded();
+
+
+    instruments[name] = sampler;
+
+
+    return sampler;
+
 }
+
+
 
 
 export async function unlockAudio() {
 
-    const ctx = getAudioContext();
+    await Tone.start();
 
-    if (ctx.state === "suspended") {
-        await ctx.resume();
+
+    if (!initialized) {
+
+        await loadInstrument(
+            "acoustic_grand_piano"
+        );
+
+        initialized = true;
+
     }
 
 }
 
 
-function midiToFrequency(midi) {
-
-    return 440 *
-        Math.pow(
-            2,
-            (midi - 69) / 12
-        );
-
-}
 
 
-export function stopAllNotes() {
+function midiToNote(midi) {
 
-    activeOscillators.forEach(osc => {
-
-        try {
-            osc.stop();
-        }
-        catch {}
-
-    });
-
-    activeOscillators = [];
+    return Tone.Frequency(
+        midi,
+        "midi"
+    ).toNote();
 
 }
 
 
 
-export function playNote(
+
+export async function playNote(
     midi,
     duration,
-    volume = 0.5
+    volume = 0.8,
+    instrument = "acoustic_grand_piano"
 ) {
 
-    const ctx = getAudioContext();
+
+    const synth =
+        await loadInstrument(instrument);
 
 
-    const oscillator =
-        ctx.createOscillator();
+
+    synth.volume.value =
+        Tone.gainToDb(volume);
 
 
-    const gain =
-        ctx.createGain();
 
+    synth.triggerAttackRelease(
 
-    oscillator.type = "sine";
+        midiToNote(midi),
 
+        duration
 
-    oscillator.frequency.value =
-        midiToFrequency(midi);
-
-
-    gain.gain.value = volume;
-
-
-    oscillator.connect(gain);
-
-    gain.connect(
-        ctx.destination
     );
-
-
-    activeOscillators.push(oscillator);
-
-
-    oscillator.start();
-
-
-    gain.gain.exponentialRampToValueAtTime(
-        0.001,
-        ctx.currentTime + duration
-    );
-
-
-    oscillator.stop(
-        ctx.currentTime + duration
-    );
-
 
 }
 
 
 
-export function playChord(
+
+
+export async function playChord(
     notes,
     beats,
     bpm,
-    volume
+    volume = 0.8,
+    instrument = "acoustic_grand_piano"
 ) {
+
 
     const duration =
         (60 / bpm) * beats;
 
 
+
+    const synth =
+        await loadInstrument(instrument);
+
+
+
+    synth.volume.value =
+        Tone.gainToDb(volume);
+
+
+
     notes.forEach(note => {
 
-        playNote(
-            note,
-            duration,
-            volume
+
+        synth.triggerAttackRelease(
+
+            midiToNote(note),
+
+            duration
+
         );
+
 
     });
 

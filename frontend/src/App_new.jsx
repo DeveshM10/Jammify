@@ -313,7 +313,8 @@ const playStep = async (chords)=>{
             midiNotes,
             chord.beats,
             bpmRef.current,
-            chord.volume
+            chord.volume,
+            chord.instrument
         );
 
 
