@@ -73,7 +73,7 @@ async function loadInstrument(name) {
                 baseUrls[name] ||
                 baseUrls.acoustic_grand_piano
 
-        });
+        }).toDestination();
 
 
 
@@ -132,13 +132,14 @@ export async function playNote(
 
     const synth =
         await loadInstrument(instrument);
-
+    
+    const synth = baseSynth.clone();
 
 
     synth.volume.value =
         Tone.gainToDb(volume);
 
-
+    synth.toDestination();
 
     synth.triggerAttackRelease(
 
@@ -173,8 +174,8 @@ export async function playChord(
 
 
 
-    const gain = new Tone.Gain(volume).toDestination();
-    const voice = synth.chain(gain);
+    synth.volume.value =
+        Tone.gainToDb(volume);
 
 
 
@@ -182,20 +183,19 @@ export async function playChord(
 
     const noteName = midiToNote(note);
 
-    voice.triggerAttack(
+    synth.triggerAttack(
         noteName
     );
 
     activeVoices.push({
-        synth: voice,
-        gain,
+        synth,
         note: noteName
     });
 
 
     setTimeout(() => {
 
-        voice.triggerRelease(noteName);
+        synth.triggerRelease(noteName);
 
         activeVoices =
             activeVoices.filter(
@@ -219,7 +219,6 @@ export function stopAllNotes() {
             voice.synth.triggerRelease(
                 voice.note
             );
-            voice.gain.dispose();
 
         }
     );
