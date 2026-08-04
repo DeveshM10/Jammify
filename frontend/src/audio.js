@@ -66,18 +66,17 @@ async function loadInstrument(name) {
 
     const sampler = new Tone.Sampler({
 
-        urls:
-            instrumentUrls[name] ||
-            instrumentUrls.acoustic_grand_piano,
+        urls: instrumentUrls[name],
 
-        baseUrl:
-            baseUrls[name] ||
-            baseUrls.acoustic_grand_piano
+        baseUrl: baseUrls[name],
 
     });
 
 
-    await sampler.loaded;
+    sampler.toDestination();
+
+
+    await Tone.loaded();
 
 
     instruments[name] = sampler;
@@ -89,19 +88,19 @@ async function loadInstrument(name) {
 
 
 
-export async function unlockAudio() {
+
+export async function unlockAudio(){
 
     await Tone.start();
 
 
-    if (!initialized) {
+    if(!initialized){
 
         await loadInstrument(
             "acoustic_grand_piano"
         );
 
         initialized = true;
-
     }
 
 }
@@ -109,7 +108,7 @@ export async function unlockAudio() {
 
 
 
-function midiToNote(midi) {
+function midiToNote(midi){
 
     return Tone.Frequency(
         midi,
@@ -121,52 +120,21 @@ function midiToNote(midi) {
 
 
 
-export function updateTrackVolume(trackId, volume) {
+export function updateTrackVolume(
+    trackId,
+    volume
+){
 
-    if (trackGains[trackId]) {
+    if(trackGains[trackId]){
 
-        trackGains[trackId].gain.rampTo(
-            volume,
-            0.05
-        );
+        trackGains[trackId]
+            .gain
+            .rampTo(
+                volume,
+                0.05
+            );
 
     }
-
-}
-
-
-
-
-export async function playNote(
-    midi,
-    duration,
-    volume = 0.8,
-    instrument = "acoustic_grand_piano"
-) {
-
-    const sampler =
-        await loadInstrument(instrument);
-
-
-    const gain =
-        new Tone.Gain(volume)
-        .toDestination();
-
-
-    sampler.connect(gain);
-
-
-    sampler.triggerAttackRelease(
-        midiToNote(midi),
-        duration
-    );
-
-
-    setTimeout(() => {
-
-        gain.dispose();
-
-    }, duration * 1000);
 
 }
 
@@ -181,15 +149,16 @@ export async function playChord(
     volume = 0.8,
     instrument = "acoustic_grand_piano",
     trackId
-) {
-
+){
 
     const duration =
         (60 / bpm) * beats;
 
 
 
-    if (!trackGains[trackId]) {
+    // create track audio chain once
+
+    if(!trackGains[trackId]){
 
         trackGains[trackId] =
             new Tone.Gain(volume)
@@ -199,19 +168,34 @@ export async function playChord(
 
 
 
-    if (!trackSamplers[trackId]) {
+    if(!trackSamplers[trackId]){
+
 
         const sampler =
-            await loadInstrument(instrument);
+            await loadInstrument(
+                instrument
+            );
 
 
         trackSamplers[trackId] =
-            sampler;
+            new Tone.Sampler({
+
+                urls:
+                instrumentUrls[instrument],
+
+                baseUrl:
+                baseUrls[instrument]
+
+            });
 
 
-        sampler.connect(
-            trackGains[trackId]
-        );
+        await Tone.loaded();
+
+
+        trackSamplers[trackId]
+            .connect(
+                trackGains[trackId]
+            );
 
     }
 
@@ -221,16 +205,13 @@ export async function playChord(
         trackSamplers[trackId];
 
 
-    const gain =
-        trackGains[trackId];
 
-
-
-    notes.forEach(note => {
+    notes.forEach(note=>{
 
 
         const noteName =
             midiToNote(note);
+
 
 
         sampler.triggerAttack(
@@ -238,18 +219,20 @@ export async function playChord(
         );
 
 
+
         activeVoices.push({
 
             sampler,
-            gain,
+
             note: noteName,
+
             trackId
 
         });
 
 
 
-        setTimeout(() => {
+        setTimeout(()=>{
 
 
             sampler.triggerRelease(
@@ -278,11 +261,11 @@ export async function playChord(
 
 
 
-export function stopAllNotes() {
+export function stopAllNotes(){
 
 
     activeVoices.forEach(
-        voice => {
+        voice=>{
 
             voice.sampler.triggerRelease(
                 voice.note
@@ -292,6 +275,6 @@ export function stopAllNotes() {
     );
 
 
-    activeVoices = [];
+    activeVoices=[];
 
 }
