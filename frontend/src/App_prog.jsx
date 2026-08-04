@@ -144,7 +144,8 @@ function getCurrentChord(track){
         pos={
             progression:0,
             chord:0,
-            repeat:0
+            repeat:0,
+
         };
 
         playbackPositionRef.current[track.id]=pos;
@@ -700,14 +701,6 @@ const playAllTracks = async () => {
 
                 if(!chord)
                     return null;
-
-
-                // first time playing this chord
-                if(pos.beatsRemaining === 0){
-
-                    pos.beatsRemaining = chord.beats;
-
-                }
 
 
 
