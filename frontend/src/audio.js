@@ -1,5 +1,5 @@
 import * as Tone from "tone";
-
+let activeVoices = [];
 let instruments = {};
 let initialized = false;
 
@@ -180,16 +180,49 @@ export async function playChord(
 
     notes.forEach(note => {
 
+    const noteName = midiToNote(note);
 
-        synth.triggerAttackRelease(
+    synth.triggerAttack(
+        noteName
+    );
 
-            midiToNote(note),
+    activeVoices.push({
+        synth,
+        note: noteName
+    });
 
-            duration
 
-        );
+    setTimeout(() => {
+
+        synth.triggerRelease(noteName);
+
+        activeVoices =
+            activeVoices.filter(
+                v =>
+                !(v.synth === synth &&
+                  v.note === noteName)
+            );
+
+    }, duration * 1000);
 
 
     });
+
+}
+
+export function stopAllNotes() {
+
+    activeVoices.forEach(
+        voice => {
+
+            voice.synth.triggerRelease(
+                voice.note
+            );
+
+        }
+    );
+
+
+    activeVoices = [];
 
 }
