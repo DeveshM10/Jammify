@@ -373,7 +373,7 @@ const updateProgressionRepeat = (
                                 ? prog
                                 : {
                                     ...prog,
-                                    repeat: Number(value)
+                                    repeat: Math.max(1, Number(value))
                                 }
                         )
                 }
@@ -1320,7 +1320,7 @@ const stopProgression = () => {
                             updateProgressionRepeat(
                                 track.id,
                                 prog.id,
-                                e.target.value
+                                Math.max(1, Number(e.target.value))
                             );
 
                         }}
