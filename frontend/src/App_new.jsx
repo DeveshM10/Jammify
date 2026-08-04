@@ -21,7 +21,8 @@ import {
 
 import {
     unlockAudio,
-    playChord
+    playChord,
+    stopAllNotes
 } from "./audio";
 
 
@@ -406,17 +407,17 @@ const playAllTracks = async () => {
 
     // Only move playhead when there is sound
     if (chordsAtStep.length > 0) {
-    await playStep(chordsAtStep);
+        await playStep(chordsAtStep);
 
-    const maxBeats = Math.max(
-        ...chordsAtStep.map(c => c.beats),
-        1
-    );
+        const maxBeats = Math.max(
+            ...chordsAtStep.map(c => c.beats),
+            1
+        );
 
-    await sleep((60 / bpmRef.current) * maxBeats * 1000);
-} else {
-    await sleep(50);
-}
+        await sleep((60 / bpmRef.current) * maxBeats * 1000);
+    } else {
+        await sleep(50);
+    }
 
 
 
@@ -426,12 +427,16 @@ const playAllTracks = async () => {
     try {
 
             if (chordsAtStep.length > 0) {
+
+                stopAllNotes();
+
                 await playStep(chordsAtStep);
+
             }
-            else {
-                // all tracks muted, prevent infinite loop
-                await sleep(50);
-            }
+
+            await sleep(
+                (60 / bpmRef.current) * 1000
+            );
 
             // step timing
 

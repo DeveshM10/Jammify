@@ -1,37 +1,52 @@
-// audio.js
-
 let audioContext = null;
 
+let activeOscillators = [];
 
-function getAudioContext(){
 
-    if(!audioContext){
-        audioContext =
-            new AudioContext();
+function getAudioContext() {
+    if (!audioContext) {
+        audioContext = new AudioContext();
     }
 
     return audioContext;
 }
 
 
-export async function unlockAudio(){
+export async function unlockAudio() {
 
     const ctx = getAudioContext();
 
-    if(ctx.state === "suspended"){
+    if (ctx.state === "suspended") {
         await ctx.resume();
     }
 
 }
 
 
-function midiToFrequency(midi){
+function midiToFrequency(midi) {
 
     return 440 *
         Math.pow(
             2,
             (midi - 69) / 12
         );
+
+}
+
+
+export function stopAllNotes() {
+
+    activeOscillators.forEach(osc => {
+
+        try {
+            osc.stop();
+        }
+        catch {}
+
+    });
+
+    activeOscillators = [];
+
 }
 
 
@@ -40,7 +55,7 @@ export function playNote(
     midi,
     duration,
     volume = 0.5
-){
+) {
 
     const ctx = getAudioContext();
 
@@ -60,8 +75,7 @@ export function playNote(
         midiToFrequency(midi);
 
 
-    gain.gain.value =
-        volume;
+    gain.gain.value = volume;
 
 
     oscillator.connect(gain);
@@ -69,6 +83,9 @@ export function playNote(
     gain.connect(
         ctx.destination
     );
+
+
+    activeOscillators.push(oscillator);
 
 
     oscillator.start();
@@ -83,6 +100,8 @@ export function playNote(
     oscillator.stop(
         ctx.currentTime + duration
     );
+
+
 }
 
 
@@ -92,13 +111,13 @@ export function playChord(
     beats,
     bpm,
     volume
-){
+) {
 
     const duration =
         (60 / bpm) * beats;
 
 
-    notes.forEach(note=>{
+    notes.forEach(note => {
 
         playNote(
             note,
