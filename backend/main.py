@@ -109,7 +109,6 @@ def update_tempo(settings: TempoSettings):
 
 #@app.get("/play_step")
 @app.post("/play_step")
-@app.post("/play_step")
 def play_step(chords: list[Chord]):
 
     print("RECEIVED:", chords)

@@ -406,8 +406,17 @@ const playAllTracks = async () => {
 
     // Only move playhead when there is sound
     if (chordsAtStep.length > 0) {
-        setPlayhead(step);
-    }
+    await playStep(chordsAtStep);
+
+    const maxBeats = Math.max(
+        ...chordsAtStep.map(c => c.beats),
+        1
+    );
+
+    await sleep((60 / bpmRef.current) * maxBeats * 1000);
+} else {
+    await sleep(50);
+}
 
 
 
