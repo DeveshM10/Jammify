@@ -1313,7 +1313,8 @@ const stopProgression = () => {
                         value={prog.repeat}
                         inputProps={{
                             min:1,
-                            max:99
+                            max:99,
+                            step: 1
                         }}
                         onChange={(e)=>{
 
