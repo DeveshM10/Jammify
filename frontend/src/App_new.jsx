@@ -99,6 +99,8 @@ function App() {
   const bpmRef = useRef(120);
   const beatsPerBarRef = useRef(4);
 
+  const playbackIdRef = useRef(0);
+
     useEffect(() => {
     bpmRef.current = bpm;
     }, [bpm]);
@@ -350,7 +352,11 @@ const playStep = async (chords)=>{
 
   const sleep = (ms) =>
     new Promise(resolve => {
-      timerRef.current = setTimeout(resolve, ms);
+
+        timerRef.current = setTimeout(() => {
+            timerRef.current = null;
+            resolve();
+        }, ms);
     });
 
 
@@ -368,12 +374,17 @@ const playAllTracks = async () => {
     return;
 
 
+  const playbackId = ++playbackIdRef.current;
+
   playingRef.current = true;
   pausedRef.current = false;
   setIsPlaying(true);
 
 
-  while(playingRef.current){
+  while(
+    playingRef.current &&
+    playbackId === playbackIdRef.current
+  ){
 
     const maxLength = Math.max(
     0,
@@ -429,13 +440,18 @@ const playAllTracks = async () => {
 
         for (let i = 0; i < repetitions; i++) {
 
+            if (!playingRef.current) break;
+
             stopAllNotes();
 
             await playStep(chordsAtStep);
+            if (!playingRef.current) break;
 
             await sleep(
                 (60 / bpmRef.current) * 1000
             );
+
+            if (!playingRef.current) break;
 
         }
 
@@ -443,6 +459,7 @@ const playAllTracks = async () => {
     else {
 
         await sleep(50);
+        if (!playingRef.current) break;
 
     }
 
@@ -460,6 +477,7 @@ const playAllTracks = async () => {
 
 
     playheadRef.current++;
+    setPlayhead(playheadRef.current);
 
 
     if(playheadRef.current >= maxLength){
@@ -472,7 +490,9 @@ const playAllTracks = async () => {
   }
 
 
-  setIsPlaying(false);
+  if (playbackId === playbackIdRef.current) {
+    setIsPlaying(false);
+    }
 
 };
 
@@ -480,6 +500,14 @@ const playAllTracks = async () => {
 const startPlayback = async () => {
 
     await unlockAudio();
+
+    if (playingRef.current) {
+
+        pausedRef.current = false;
+        setIsPlaying(true);
+        return;
+
+    }
 
     playAllTracks();
 
@@ -492,6 +520,7 @@ const startPlayback = async () => {
   const pauseProgression = () => {
 
     pausedRef.current = true;
+    stopAllNotes();
     setIsPlaying(false);
 
   };
@@ -499,6 +528,8 @@ const startPlayback = async () => {
 
 const stopProgression = () => {
 
+    playbackIdRef.current++;
+  stopAllNotes();
   // stop loop
   playingRef.current = false;
 
