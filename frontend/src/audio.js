@@ -1,4 +1,5 @@
 import * as Tone from "tone";
+
 let activeVoices = [];
 let instruments = {};
 let initialized = false;
@@ -34,7 +35,6 @@ const instrumentUrls = {
     }
 
 };
-
 
 
 const baseUrls = {
@@ -74,7 +74,6 @@ async function loadInstrument(name) {
                 baseUrls.acoustic_grand_piano
 
         }).toDestination();
-
 
 
     await Tone.loaded();
@@ -129,25 +128,30 @@ export async function playNote(
     instrument = "acoustic_grand_piano"
 ) {
 
-
-    const baseSynth =
+    const sampler =
         await loadInstrument(instrument);
-    
-    const synth = baseSynth.clone();
 
 
-    synth.volume.value =
-        Tone.gainToDb(volume);
+    const gain =
+        new Tone.Gain(volume).toDestination();
 
-    synth.toDestination();
 
-    synth.triggerAttackRelease(
+    sampler.connect(gain);
 
-        midiToNote(midi),
 
+    const noteName =
+        midiToNote(midi);
+
+
+    sampler.triggerAttackRelease(
+        noteName,
         duration
-
     );
+
+
+    setTimeout(() => {
+        gain.dispose();
+    }, duration * 1000);
 
 }
 
@@ -163,64 +167,88 @@ export async function playChord(
     instrument = "acoustic_grand_piano"
 ) {
 
-
     const duration =
         (60 / bpm) * beats;
 
 
+    const sampler =
+        await loadInstrument(instrument);
 
-    const baseSynth =
-    await loadInstrument(instrument);
 
-    const synth = baseSynth.clone();
+    const gain =
+        new Tone.Gain(volume).toDestination();
 
-    synth.volume.value =
-        Tone.gainToDb(volume);
 
-    synth.toDestination();
+    sampler.connect(gain);
 
 
 
     notes.forEach(note => {
 
-    const noteName = midiToNote(note);
-
-    synth.triggerAttack(
-        noteName
-    );
-
-    activeVoices.push({
-        synth,
-        note: noteName
-    });
+        const noteName =
+            midiToNote(note);
 
 
-    setTimeout(() => {
+        sampler.triggerAttack(
+            noteName
+        );
 
-        synth.triggerRelease(noteName);
 
-        activeVoices =
-            activeVoices.filter(
-                v =>
-                !(v.synth === synth &&
-                  v.note === noteName)
+        activeVoices.push({
+            sampler,
+            gain,
+            note: noteName
+        });
+
+
+
+        setTimeout(() => {
+
+            sampler.triggerRelease(
+                noteName
             );
 
-    }, duration * 1000);
+
+            activeVoices =
+                activeVoices.filter(
+                    v =>
+                    !(
+                        v.sampler === sampler &&
+                        v.note === noteName &&
+                        v.gain === gain
+                    )
+                );
+
+
+            if (
+                !activeVoices.some(
+                    v => v.gain === gain
+                )
+            ) {
+                gain.dispose();
+            }
+
+
+        }, duration * 1000);
 
 
     });
 
 }
 
+
+
+
 export function stopAllNotes() {
 
     activeVoices.forEach(
         voice => {
 
-            voice.synth.triggerRelease(
+            voice.sampler.triggerRelease(
                 voice.note
             );
+
+            voice.gain.dispose();
 
         }
     );
