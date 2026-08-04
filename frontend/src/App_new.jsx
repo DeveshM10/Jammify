@@ -23,7 +23,9 @@ import {
 import {
     unlockAudio,
     playChord,
-    stopAllNotes
+    stopAllNotes,
+    updateTrackVolume as updateAudioTrackVolume
+
 } from "./audio";
 
 
@@ -113,7 +115,7 @@ function App() {
         beatsPerBarRef.current = beatsPerBar;
     }, [beatsPerBar]);
 
-const updateTrackVolume = (id, volume) => {
+const changeTrackVolume = (id, volume) => {
     setTracks(prev =>
         prev.map(track =>
             track.id === id
@@ -124,6 +126,7 @@ const updateTrackVolume = (id, volume) => {
                 : track
         )
     );
+    updateAudioTrackVolume(id, volume);
 };
 
 
@@ -358,7 +361,8 @@ const playStep = async (chords)=>{
             chord.beats,
             bpmRef.current,
             chord.volume,
-            chord.instrument
+            chord.instrument,
+            chord.trackId
         );
 
 
@@ -454,7 +458,8 @@ const playAllTracks = async () => {
     )
     .map(track => ({
         ...track.chords[step % track.chords.length],
-        volume: track.volume
+        volume: track.volume,
+        trackId: track.id
     })
     );
 
@@ -819,7 +824,7 @@ const stopProgression = () => {
             value={track.volume}
             onChange={(e, value) => {
                 e.stopPropagation();
-                updateTrackVolume(track.id, value);
+                changeTrackVolume(track.id, value);
             }}
             sx={{
                 height: 90,

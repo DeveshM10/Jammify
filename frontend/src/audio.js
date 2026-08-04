@@ -2,6 +2,7 @@ import * as Tone from "tone";
 
 let activeVoices = [];
 let instruments = {};
+let trackGains = {};
 let initialized = false;
 
 
@@ -62,18 +63,17 @@ async function loadInstrument(name) {
     }
 
 
-    const sampler =
-        new Tone.Sampler({
+    const sampler = new Tone.Sampler({
 
-            urls:
-                instrumentUrls[name] ||
-                instrumentUrls.acoustic_grand_piano,
+        urls:
+            instrumentUrls[name] ||
+            instrumentUrls.acoustic_grand_piano,
 
-            baseUrl:
-                baseUrls[name] ||
-                baseUrls.acoustic_grand_piano
+        baseUrl:
+            baseUrls[name] ||
+            baseUrls.acoustic_grand_piano
 
-        }).toDestination();
+    });
 
 
     await Tone.loaded();
@@ -121,6 +121,19 @@ function midiToNote(midi) {
 
 
 
+export function updateTrackVolume(trackId, volume) {
+
+    if(trackGains[trackId]) {
+
+        trackGains[trackId].gain.value = volume;
+
+    }
+
+}
+
+
+
+
 export async function playNote(
     midi,
     duration,
@@ -132,29 +145,15 @@ export async function playNote(
         await loadInstrument(instrument);
 
 
-    const gain =
-        new Tone.Gain(volume).toDestination();
-
-
-    sampler.connect(gain);
-
-
-    const noteName =
-        midiToNote(midi);
+    sampler.toDestination();
 
 
     sampler.triggerAttackRelease(
-        noteName,
+        midiToNote(midi),
         duration
     );
 
-
-    setTimeout(() => {
-        gain.dispose();
-    }, duration * 1000);
-
 }
-
 
 
 
@@ -164,19 +163,36 @@ export async function playChord(
     beats,
     bpm,
     volume = 0.8,
-    instrument = "acoustic_grand_piano"
+    instrument = "acoustic_grand_piano",
+    trackId
 ) {
+
 
     const duration =
         (60 / bpm) * beats;
+
 
 
     const sampler =
         await loadInstrument(instrument);
 
 
+
+    if(!trackGains[trackId]) {
+
+        trackGains[trackId] =
+            new Tone.Gain(volume)
+            .toDestination();
+
+    }
+
+
     const gain =
-        new Tone.Gain(volume).toDestination();
+        trackGains[trackId];
+
+
+    gain.gain.value = volume;
+
 
 
     sampler.connect(gain);
@@ -184,6 +200,7 @@ export async function playChord(
 
 
     notes.forEach(note => {
+
 
         const noteName =
             midiToNote(note);
@@ -195,14 +212,18 @@ export async function playChord(
 
 
         activeVoices.push({
+
             sampler,
             gain,
-            note: noteName
+            note: noteName,
+            trackId
+
         });
 
 
 
         setTimeout(() => {
+
 
             sampler.triggerRelease(
                 noteName
@@ -215,18 +236,9 @@ export async function playChord(
                     !(
                         v.sampler === sampler &&
                         v.note === noteName &&
-                        v.gain === gain
+                        v.trackId === trackId
                     )
                 );
-
-
-            if (
-                !activeVoices.some(
-                    v => v.gain === gain
-                )
-            ) {
-                gain.dispose();
-            }
 
 
         }, duration * 1000);
@@ -241,14 +253,13 @@ export async function playChord(
 
 export function stopAllNotes() {
 
+
     activeVoices.forEach(
         voice => {
 
             voice.sampler.triggerRelease(
                 voice.note
             );
-
-            voice.gain.dispose();
 
         }
     );
