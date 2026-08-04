@@ -8,7 +8,8 @@ import {
   TextField,
   MenuItem,
   Grid,
-  Slider
+  Slider,
+  Menu
 } from "@mui/material";
 
 import IconButton from "@mui/material/IconButton";
@@ -62,6 +63,9 @@ function App() {
   const [open, setOpen] = useState(false);
   const [tracks, setTracks] = useState([]);
   const [selectedTrack, setSelectedTrack] = useState(null);
+
+  const [trackMenuAnchor, setTrackMenuAnchor] = useState(null);
+  const [menuTrackId, setMenuTrackId] = useState(null);
 
   const [tempoDialogOpen, setTempoDialogOpen] = useState(false);
   const [beatsPerBar, setBeatsPerBar] = useState(4);
@@ -140,6 +144,40 @@ const updateTrackVolume = (id, volume) => {
     ]);
 
 };
+
+
+const duplicateTrack = (id) => {
+
+    setTracks(prev => {
+
+        const index = prev.findIndex(
+            track => track.id === id
+        );
+
+        if (index === -1) return prev;
+
+        const original = prev[index];
+
+        const copy = {
+            ...original,
+            id: Date.now(),
+            name: `${original.name} Copy`,
+            chords: original.chords.map(chord => ({
+                ...chord
+            }))
+        };
+
+        return [
+            ...prev.slice(0, index + 1),
+            copy,
+            ...prev.slice(index + 1)
+        ];
+
+    });
+
+};
+
+
 
 const deleteTrack = (id) => {
 
@@ -751,13 +789,26 @@ const stopProgression = () => {
 
 
         <div
-        style={{
-        width:120,
-        fontWeight:700,
-        color:colors.text
-        }}
-        >
-        {track.name}
+            onClick={(e)=>{
+
+                e.stopPropagation();
+
+                setMenuTrackId(track.id);
+                setTrackMenuAnchor(e.currentTarget);
+
+            }}
+
+            style={{
+                width:120,
+                fontWeight:700,
+                color:colors.text,
+                cursor:"pointer",
+                padding:8,
+                borderRadius:8
+            }}
+
+            >
+            {track.name}
         </div>
 
         <Slider
@@ -1322,6 +1373,46 @@ const stopProgression = () => {
     </DialogActions>
 </Dialog>
 
+
+
+<Menu
+    anchorEl={trackMenuAnchor}
+    open={Boolean(trackMenuAnchor)}
+    onClose={()=>{
+        setTrackMenuAnchor(null);
+        setMenuTrackId(null);
+    }}
+>
+
+<MenuItem
+    onClick={()=>{
+
+        duplicateTrack(menuTrackId);
+
+        setTrackMenuAnchor(null);
+        setMenuTrackId(null);
+
+    }}
+>
+    Duplicate Track
+</MenuItem>
+
+
+<MenuItem
+    onClick={()=>{
+
+        deleteTrack(menuTrackId);
+
+        setTrackMenuAnchor(null);
+        setMenuTrackId(null);
+
+    }}
+>
+    Delete Track
+</MenuItem>
+
+
+</Menu>
 
 
 
