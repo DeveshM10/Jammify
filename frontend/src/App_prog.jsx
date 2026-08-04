@@ -67,7 +67,7 @@ function App() {
 
 
   const [selectedProgression, setSelectedProgression] = useState(null);
-
+  const [editingRepeat, setEditingRepeat] = useState(null);
 
   const [trackMenuAnchor, setTrackMenuAnchor] = useState(null);
   const [menuTrackId, setMenuTrackId] = useState(null);
@@ -354,6 +354,33 @@ const toggleMuteTrack = (id) => {
 
 };
 
+
+const updateProgressionRepeat = (
+    trackId,
+    progressionId,
+    value
+) => {
+
+    setTracks(prev =>
+        prev.map(track =>
+            track.id !== trackId
+                ? track
+                : {
+                    ...track,
+                    progressions:
+                        track.progressions.map(prog =>
+                            prog.id !== progressionId
+                                ? prog
+                                : {
+                                    ...prog,
+                                    repeat: Number(value)
+                                }
+                        )
+                }
+        )
+    );
+
+};
 
 
 
@@ -1269,12 +1296,38 @@ const stopProgression = () => {
 
 
                 <div
-                style={{
-                    fontSize:13,
-                    color:"#777"
-                }}
-                >
-                    Repeat: {prog.repeat}
+                    style={{
+                        fontSize:13,
+                        color:"#777",
+                        display:"flex",
+                        alignItems:"center",
+                        gap:8
+                    }}
+                    >
+
+                    Repeat:
+
+                    <TextField
+                        type="number"
+                        size="small"
+                        value={prog.repeat}
+                        inputProps={{
+                            min:1,
+                            max:99
+                        }}
+                        onChange={(e)=>{
+
+                            updateProgressionRepeat(
+                                track.id,
+                                prog.id,
+                                e.target.value
+                            );
+
+                        }}
+                        sx={{
+                            width:70
+                        }}
+                    />
                     <Button
                         size="small"
                         onClick={()=>{
