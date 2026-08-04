@@ -169,13 +169,15 @@ export async function playChord(
 
 
 
-    const synth =
-        await loadInstrument(instrument);
+    const baseSynth =
+    await loadInstrument(instrument);
 
-
+    const synth = baseSynth.clone();
 
     synth.volume.value =
         Tone.gainToDb(volume);
+
+    synth.toDestination();
 
 
 
