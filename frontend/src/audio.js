@@ -191,6 +191,8 @@ export async function playChord(
 
         const baseSampler =
             await loadInstrument(instrument);
+        
+        await Tone.loaded();
 
         trackSamplers[trackId] =
             baseSampler.clone();
