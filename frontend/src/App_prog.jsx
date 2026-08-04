@@ -169,43 +169,68 @@ function getCurrentChord(track){
 
 function advanceTrack(track){
 
-    const pos =
-    playbackPositionRef.current[track.id];
-
+    const pos = playbackPositionRef.current[track.id];
 
     const progression =
-    track.progressions[pos.progression];
+        track.progressions[pos.progression];
 
+
+    if(!progression || progression.chords.length === 0)
+        return;
+
+
+    const currentChord =
+        progression.chords[pos.chord];
+
+
+    if(!currentChord)
+        return;
+
+
+    // count how many times this chord should play in the bar
+
+    if(!pos.playCount){
+
+        pos.playCount =
+            beatsPerBarRef.current /
+            currentChord.beats;
+
+    }
+
+
+    pos.playCount--;
+
+
+    // still repeating this chord
+    if(pos.playCount > 0)
+        return;
+
+
+
+    // move to next chord
+
+    pos.playCount = 0;
 
     pos.chord++;
-
-    if (progression.chords.length === 0) {
-        pos.progression =
-            (pos.progression + 1) %
-            track.progressions.length;
-        pos.chord = 0;
-        pos.repeat = 0;
-        return;
-    }
 
 
     if(pos.chord >= progression.chords.length){
 
-        pos.chord=0;
+        pos.chord = 0;
+
         pos.repeat++;
 
 
         if(pos.repeat >= progression.repeat){
 
-            pos.repeat=0;
+            pos.repeat = 0;
+
             pos.progression++;
 
 
-            if(
-              pos.progression >= track.progressions.length
-            ){
+            if(pos.progression >= track.progressions.length){
 
-                pos.progression=0;
+                pos.progression = 0;
 
             }
 
@@ -664,6 +689,10 @@ const playAllTracks = async () => {
             .map(track => {
 
 
+                const pos =
+                    playbackPositionRef.current[track.id];
+
+
                 const chord =
                     getCurrentChord(track);
 
@@ -671,6 +700,16 @@ const playAllTracks = async () => {
 
                 if(!chord)
                     return null;
+
+
+                // first time playing this chord
+                if(pos.beatsRemaining === 0){
+
+                    pos.beatsRemaining = chord.beats;
+
+                }
+
+
 
 
 
