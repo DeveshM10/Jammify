@@ -4,7 +4,7 @@ let activeVoices = [];
 let instruments = {};
 let trackGains = {};
 let initialized = false;
-
+let trackSamplers = {};
 
 const instrumentUrls = {
 
@@ -145,13 +145,18 @@ export async function playNote(
         await loadInstrument(instrument);
 
 
-    sampler.toDestination();
+    const gain = new Tone.Gain(volume).toDestination();
 
+sampler.connect(gain);
 
-    sampler.triggerAttackRelease(
-        midiToNote(midi),
-        duration
-    );
+sampler.triggerAttackRelease(
+    midiToNote(midi),
+    duration
+);
+
+setTimeout(() => {
+    gain.dispose();
+}, duration * 1000);
 
 }
 
@@ -173,12 +178,7 @@ export async function playChord(
 
 
 
-    const sampler =
-        await loadInstrument(instrument);
-
-
-
-    if(!trackGains[trackId]) {
+    if (!trackGains[trackId]) {
 
         trackGains[trackId] =
             new Tone.Gain(volume)
@@ -187,15 +187,24 @@ export async function playChord(
     }
 
 
-    const gain =
-        trackGains[trackId];
+    if (!trackSamplers[trackId]) {
+
+        const baseSampler =
+            await loadInstrument(instrument);
+
+        trackSamplers[trackId] =
+            baseSampler.clone();
+
+        trackSamplers[trackId]
+            .connect(trackGains[trackId]);
+
+    }
 
 
-    gain.gain.value = volume;
+    const sampler =
+        trackSamplers[trackId];
 
-
-
-    sampler.connect(gain);
+    const gain = trackGains[trackId];
 
 
 
