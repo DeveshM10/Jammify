@@ -130,7 +130,7 @@ export async function playNote(
 ) {
 
 
-    const synth =
+    const baseSynth =
         await loadInstrument(instrument);
     
     const synth = baseSynth.clone();
