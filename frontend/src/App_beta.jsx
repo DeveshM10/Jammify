@@ -893,20 +893,18 @@ const stopProgression = () => {
             }}
             >
 
-            {isPlaying && (
             <div
-            style={{
-            position:"absolute",
-            left:`${playhead * 80}px`,
-            top:-5,
-            height:80,
-            width:3,
-            background:colors.primary,
-            transition:`left ${60000 / bpmRef.current}ms linear`,
-            zIndex:5
-            }}
+                style={{
+                    position:"absolute",
+                    left:`${playhead * 80 + (isPlaying ? 70 : 0)}px`,
+                    top:-5,
+                    height:80,
+                    width:3,
+                    background:colors.primary,
+                    transition:`left ${60000 / bpmRef.current}ms linear`,
+                    zIndex:5
+                }}
             />
-            )}
 
 
 
