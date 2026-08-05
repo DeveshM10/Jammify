@@ -156,9 +156,6 @@ export async function playChord(
         (60 / bpm) * beats;
 
 
-
-    // create track audio chain once
-
     if(!trackGains[trackId]){
 
         trackGains[trackId] =
@@ -168,95 +165,84 @@ export async function playChord(
     }
 
 
-
     if(!trackSamplers[trackId]){
-
 
         const sampler =
             await loadInstrument(
                 instrument
             );
 
+        trackSamplers[trackId] = sampler;
 
-        trackSamplers[trackId] =
-            new Tone.Sampler({
+        sampler.disconnect();
 
-                urls:
-                instrumentUrls[instrument],
-
-                baseUrl:
-                baseUrls[instrument]
-
-            });
-
-
-        await Tone.loaded();
-
-
-        trackSamplers[trackId]
-            .connect(
-                trackGains[trackId]
-            );
+        sampler.connect(
+            trackGains[trackId]
+        );
 
     }
-
 
 
     const sampler =
         trackSamplers[trackId];
 
 
+    for(let i = 0; i < notes.length; i++){
 
-    notes.forEach((note, index)=>{
+        const noteName =
+            midiToNote(notes[i]);
+
+
+        sampler.triggerAttack(
+            noteName
+        );
+
+
+        activeVoices.push({
+
+            sampler,
+
+            note: noteName,
+
+            trackId
+
+        });
+
 
         setTimeout(()=>{
 
-            const noteName =
-                midiToNote(note);
-
-
-            sampler.triggerAttack(
+            sampler.triggerRelease(
                 noteName
             );
 
 
-            activeVoices.push({
-
-                sampler,
-
-                note: noteName,
-
-                trackId
-
-            });
-
-
-            setTimeout(()=>{
-
-
-                sampler.triggerRelease(
-                    noteName
+            activeVoices =
+                activeVoices.filter(
+                    v =>
+                    !(
+                        v.sampler === sampler &&
+                        v.note === noteName &&
+                        v.trackId === trackId
+                    )
                 );
 
 
-                activeVoices =
-                    activeVoices.filter(
-                        v =>
-                        !(
-                            v.sampler === sampler &&
-                            v.note === noteName &&
-                            v.trackId === trackId
-                        )
-                    );
+        }, duration * 1000);
 
 
-            }, duration * 1000);
+        // wait between notes
+        if(i < notes.length - 1){
 
+            await new Promise(resolve =>
+                setTimeout(
+                    resolve,
+                    wait * 1000
+                )
+            );
 
-        }, index * wait * 1000);
+        }
 
-
-    });
+    }
 
 }
 
