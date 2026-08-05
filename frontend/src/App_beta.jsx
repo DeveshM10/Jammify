@@ -119,6 +119,16 @@ function App() {
         beatsPerBarRef.current = beatsPerBar;
     }, [beatsPerBar]);
 
+    useEffect(() => {
+    if (justLoopedRef.current) {
+        justLoopedRef.current = false;
+    }
+    }, [playhead]);
+
+
+    // looper
+    const justLoopedRef = useRef(false);
+
 const changeTrackVolume = (id, volume) => {
     setTracks(prev =>
         prev.map(track =>
@@ -543,6 +553,7 @@ const playAllTracks = async () => {
     if(playheadRef.current >= maxLength){
 
       playheadRef.current = 0;
+      justLoopedRef.current = true;
 
     }
 
@@ -901,7 +912,9 @@ const stopProgression = () => {
                     height:80,
                     width:3,
                     background:colors.primary,
-                    transition:`left ${60000 / bpmRef.current}ms linear`,
+                    transition: justLoopedRef.current
+                        ? "none"
+                        : `left ${60000 / bpmRef.current}ms linear`,
                     zIndex:5
                 }}
             />
