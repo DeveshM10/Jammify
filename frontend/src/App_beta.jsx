@@ -567,6 +567,9 @@ const playAllTracks = async () => {
 const startPlayback = async () => {
 
     await unlockAudio();
+    
+    // Give WebAudio time to wake up
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     if (playingRef.current) {
 
