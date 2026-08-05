@@ -77,13 +77,15 @@ function App() {
   const [chordInput, setChordInput] = useState("");
   
   const [selectedChord, setSelectedChord] = useState(null);
-    const [editChord, setEditChord] = useState({
+  const [editChord, setEditChord] = useState({
     name: "",
     octave: "4",
     beats: "1",
     instrument: "acoustic_grand_piano",
     wait: "0"
     });
+
+  const [playingChord, setPlayingChord] = useState(null);
 
     
 
@@ -462,18 +464,30 @@ const playAllTracks = async () => {
     const step = playheadRef.current;
 
 
-    const chordsAtStep = tracksRef.current
-    .filter(track =>
-        track.chords.length > 0 &&
-        !track.muted
-    )
-    .map(track => ({
-        ...track.chords[step % track.chords.length],
-        volume: track.volume,
-        trackId: track.id
-    })
-    );
+    const chordsAtStep =
+        tracksRef.current
+        .filter(track =>
+            !track.muted &&
+            track.progressions &&
+            track.progressions.length > 0
+        )
+        .map(track => {
 
+            const index = playheadRef.current;
+
+            const chord = track.chords[index % track.chords.length];
+
+            if (!chord)
+                return null;
+
+            return {
+                ...chord,
+                volume: track.volume,
+                trackId: track.id,
+                index
+            };
+
+        })
 
 
     console.log("STEP:", step, chordsAtStep);
@@ -498,12 +512,21 @@ const playAllTracks = async () => {
 
             stopAllNotes();
 
+            setPlayingChord(
+                chordsAtStep.map(c => ({
+                    trackId: c.trackId,
+                    name: c.name,
+                    index: c.index
+                }))
+            );
             await playStep(chordsAtStep);
+            
             if (!playingRef.current) break;
 
             await sleep(
                 (60 / bpmRef.current) * 1000
             );
+            setPlayingChord(null);
 
             if (!playingRef.current) break;
 
@@ -909,7 +932,14 @@ const stopProgression = () => {
             style={{
             width:70,
             height:70,
-            background:colors.card,
+            background:
+                playingChord?.some(
+                    chord =>
+                        chord.trackId === track.id &&
+                        chord.index === i
+                )
+                ? "#B8FFB8"
+                : colors.card,
             border:`2px solid ${colors.border}`,
             borderRadius:12,
             display:"flex",
