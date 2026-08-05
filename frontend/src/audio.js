@@ -148,7 +148,8 @@ export async function playChord(
     bpm,
     volume = 0.8,
     instrument = "acoustic_grand_piano",
-    trackId
+    trackId,
+    wait = 0
 ){
 
     const duration =
@@ -206,52 +207,53 @@ export async function playChord(
 
 
 
-    notes.forEach(note=>{
-
-
-        const noteName =
-            midiToNote(note);
-
-
-
-        sampler.triggerAttack(
-            noteName
-        );
-
-
-
-        activeVoices.push({
-
-            sampler,
-
-            note: noteName,
-
-            trackId
-
-        });
-
-
+    notes.forEach((note, index)=>{
 
         setTimeout(()=>{
 
+            const noteName =
+                midiToNote(note);
 
-            sampler.triggerRelease(
+
+            sampler.triggerAttack(
                 noteName
             );
 
 
-            activeVoices =
-                activeVoices.filter(
-                    v =>
-                    !(
-                        v.sampler === sampler &&
-                        v.note === noteName &&
-                        v.trackId === trackId
-                    )
+            activeVoices.push({
+
+                sampler,
+
+                note: noteName,
+
+                trackId
+
+            });
+
+
+            setTimeout(()=>{
+
+
+                sampler.triggerRelease(
+                    noteName
                 );
 
 
-        }, duration * 1000);
+                activeVoices =
+                    activeVoices.filter(
+                        v =>
+                        !(
+                            v.sampler === sampler &&
+                            v.note === noteName &&
+                            v.trackId === trackId
+                        )
+                    );
+
+
+            }, duration * 1000);
+
+
+        }, index * wait * 1000);
 
 
     });

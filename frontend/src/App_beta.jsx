@@ -361,32 +361,25 @@ const playStep = async (chords) => {
     );
 
     await Promise.all(
-        chords.map(chord =>
-            new Promise(resolve => {
+        chords.map(async chord => {
 
-                setTimeout(()=>{
+            const midiNotes =
+                chordToMidi(
+                    chord.name,
+                    chord.octave
+                );
 
-                    const midiNotes =
-                        chordToMidi(
-                            chord.name,
-                            chord.octave
-                        );
+            await playChord(
+                midiNotes,
+                chord.beats,
+                bpmRef.current,
+                chord.volume,
+                chord.instrument,
+                chord.trackId,
+                chord.wait
+            );
 
-                    playChord(
-                        midiNotes,
-                        chord.beats,
-                        bpmRef.current,
-                        chord.volume,
-                        chord.instrument,
-                        chord.trackId
-                    );
-
-                    resolve();
-
-                }, chord.wait * 1000);
-
-            })
-        )
+        })
     );
 
     // remove highlight after playing
