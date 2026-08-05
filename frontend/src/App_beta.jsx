@@ -541,11 +541,13 @@ const playAllTracks = async () => {
 
 
     playheadRef.current++;
-    setPlayhead(playheadRef.current);
-
     if(playheadRef.current >= maxLength){
         playheadRef.current = 0;
     }
+    
+    setPlayhead(playheadRef.current);
+
+    
 
 
   }
