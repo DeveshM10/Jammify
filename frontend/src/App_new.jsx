@@ -519,6 +519,7 @@ const playAllTracks = async () => {
                     index: c.index
                 }))
             );
+            
             await playStep(chordsAtStep);
             
             if (!playingRef.current) break;
