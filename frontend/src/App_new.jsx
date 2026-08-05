@@ -79,20 +79,20 @@ function App() {
   const [selectedChord, setSelectedChord] = useState(null);
     const [editChord, setEditChord] = useState({
     name: "",
-    octave: 4,
-    beats: 1,
+    octave: "4",
+    beats: "1",
     instrument: "acoustic_grand_piano",
-    wait: 0
+    wait: "0"
     });
 
     
 
   const [newChord, setNewChord] = useState({
   name: "",
-  octave: 4,
-  beats: 1,
+  octave: "4",
+  beats: "1",
   instrument: "acoustic_grand_piano",
-  wait: 0
+  wait: "0"
     });
 
   const [mode, setMode] = useState("normal");
@@ -101,14 +101,14 @@ function App() {
   const [playhead, setPlayhead] = useState(0);
   
 
-  const [bpm, setBpm] = useState(120);
+  const [bpm, setBpm] = useState("120");
   const bpmRef = useRef(120);
   const beatsPerBarRef = useRef(4);
 
   const playbackIdRef = useRef(0);
 
     useEffect(() => {
-    bpmRef.current = bpm;
+    bpmRef.current = Number(bpm);
     }, [bpm]);
 
     useEffect(() => {
@@ -184,33 +184,25 @@ const duplicateTrack = (id) => {
 
 const deleteTrack = (id) => {
 
-  const remainingTracks = tracks.filter(
-    t => t.id !== id
-  );
+  setTracks(prev => {
 
-  setTracks(remainingTracks);
+    const remainingTracks = prev.filter(
+      t => t.id !== id
+    );
 
-
-  // Reset playhead
-  playheadRef.current = 0;
-  setPlayhead(0);
-
-
-  // If no tracks left, stop playback UI
-  if (remainingTracks.length === 0) {
-
-    playingRef.current = false;
-    pausedRef.current = false;
-
-    if(abortControllerRef.current){
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
+    if (remainingTracks.length === 0) {
+      playingRef.current = false;
+      pausedRef.current = false;
+      clearTimeout(timerRef.current);
+      setIsPlaying(false);
     }
 
-    clearTimeout(timerRef.current);
+    return remainingTracks;
 
-    setIsPlaying(false);
-  }
+  });
+
+  playheadRef.current = 0;
+  setPlayhead(0);
 
 };
 
@@ -242,19 +234,27 @@ const addChordToTrack = () => {
             ...track,
             chords: [
               ...track.chords,
-              { ...newChord }
+              {
+                ...newChord,
+
+                // convert back to numbers
+                octave: Number(newChord.octave),
+                beats: Number(newChord.beats),
+                wait: Number(newChord.wait)
+              }
             ]
           }
         : track
     )
   );
 
+
   setNewChord({
     name: "",
-    octave: 4,
-    beats: 1,
+    octave: "4",
+    beats: "1",
     instrument: "acoustic_grand_piano",
-    wait: 0
+    wait: "0"
   });
 };
 
@@ -289,7 +289,14 @@ const editChordData = () => {
                     ...track,
                     chords: track.chords.map((chord, index) =>
                         index === selectedChord.index
-                            ? { ...editChord }
+                            ? {
+                                ...editChord,
+
+                                // convert strings back to numbers
+                                octave: Number(editChord.octave),
+                                beats: Number(editChord.beats),
+                                wait: Number(editChord.wait)
+                            }
                             : chord
                     )
                 }
@@ -301,10 +308,10 @@ const editChordData = () => {
 
     setEditChord({
         name: "",
-        octave: 4,
-        beats: 1,
+        octave: "4",
+        beats: "1",
         instrument: "acoustic_grand_piano",
-        wait: 0
+        wait: "0"
     });
 };
 
@@ -315,7 +322,7 @@ const editChordData = () => {
 const saveTempo = async () => {
     const finalBpm = Math.min(
         240,
-        Math.max(40, Number(bpm))
+        Math.max(40, Number(bpm) || 120)
     );
 
     const finalBeats = Math.min(
@@ -345,32 +352,36 @@ const saveTempo = async () => {
 
 const playStep = async (chords)=>{
 
+    await Promise.all(
+        chords.map(chord =>
+            new Promise(resolve => {
 
-    chords.forEach(chord=>{
+                setTimeout(()=>{
 
+                    const midiNotes =
+                        chordToMidi(
+                            chord.name,
+                            chord.octave
+                        );
 
-        const midiNotes =
-            chordToMidi(
-                chord.name,
-                chord.octave
-            );
+                    playChord(
+                        midiNotes,
+                        chord.beats,
+                        bpmRef.current,
+                        chord.volume,
+                        chord.instrument,
+                        chord.trackId
+                    );
 
+                    resolve();
 
-        playChord(
-            midiNotes,
-            chord.beats,
-            bpmRef.current,
-            chord.volume,
-            chord.instrument,
-            chord.trackId
-        );
+                }, chord.wait * 1000);
 
-
-    });
-
+            })
+        )
+    );
 
 };
-
 
 
 
@@ -922,7 +933,12 @@ const stopProgression = () => {
                         index: i
                     });
 
-                    setEditChord({ ...c });
+                    setEditChord({
+                        ...c,
+                        octave: String(c.octave),
+                        beats: String(c.beats),
+                        wait: String(c.wait)
+                    });
                 }}
                 sx={{
                     position: "absolute",
@@ -968,10 +984,10 @@ const stopProgression = () => {
         setEditingTrack(track.id);
         setNewChord({
             name: "",
-            octave: 4,
-            beats: 1,
+            octave: "4",
+            beats: "1",
             instrument: "acoustic_grand_piano",
-            wait: 0
+            wait: "0"
         });
 
         setOpen(true);
@@ -1054,12 +1070,7 @@ const stopProgression = () => {
                     max: 12
                 }}
                 onChange={(e) =>
-                    setBeatsPerBar(
-                        Math.min(
-                            12,
-                            Math.max(1, Number(e.target.value))
-                        )
-                    )
+                    setBeatsPerBar(e.target.value)
                 }
             />
         </DialogContent>
@@ -1111,14 +1122,33 @@ const stopProgression = () => {
 
                 <Grid size={6}>
                     <TextField
-                        type="number"
                         fullWidth
                         label="Octave"
+                        type="number"
                         value={editChord.octave}
+                        inputProps={{
+                            min:1,
+                            max:4,
+                            inputMode:"numeric"
+                        }}
                         onChange={(e)=>
                             setEditChord({
                                 ...editChord,
-                                octave: Number(e.target.value)
+                                octave:e.target.value
+                            })
+                        }
+                        onBlur={()=>
+                            setEditChord({
+                                ...editChord,
+                                octave:String(
+                                    Math.min(
+                                        4,
+                                        Math.max(
+                                            1,
+                                            Number(editChord.octave) || 1
+                                        )
+                                    )
+                                )
                             })
                         }
                     />
@@ -1126,14 +1156,33 @@ const stopProgression = () => {
 
                 <Grid size={6}>
                     <TextField
-                        type="number"
                         fullWidth
                         label="Beats"
+                        type="number"
                         value={editChord.beats}
+                        inputProps={{
+                            min:1,
+                            max:4,
+                            inputMode:"numeric"
+                        }}
                         onChange={(e)=>
                             setEditChord({
                                 ...editChord,
-                                beats: Number(e.target.value)
+                                beats:e.target.value
+                            })
+                        }
+                        onBlur={() =>
+                            setEditChord({
+                                ...editChord,
+                                beats:String(
+                                    Math.min(
+                                        4,
+                                        Math.max(
+                                            1,
+                                            Number(editChord.beats) || 1
+                                        )
+                                    )
+                                )
                             })
                         }
                     />
@@ -1259,10 +1308,21 @@ const stopProgression = () => {
                     onChange={(e)=>
                         setNewChord({
                             ...newChord,
-                            octave:Math.min(
+                            octave:e.target.value
+                        })
+                    }
+                    onBlur={() =>
+                        setNewChord({
+                            ...newChord,
+                            octave:String(
+                                Math.min(
                                     4,
-                                    Math.max(1, Number(e.target.value))
+                                    Math.max(
+                                        1,
+                                        Number(newChord.octave) || 1
+                                    )
                                 )
+                            )
                         })
                     }
                 />
@@ -1282,9 +1342,20 @@ const stopProgression = () => {
                     onChange={(e)=>
                         setNewChord({
                             ...newChord,
-                            beats:Math.min(
-                                4,
-                                Math.max(1, Number(e.target.value))
+                            beats:e.target.value
+                        })
+                    }
+                    onBlur={() =>
+                        setNewChord({
+                            ...newChord,
+                            beats:String(
+                                Math.min(
+                                    4,
+                                    Math.max(
+                                        1,
+                                        Number(newChord.beats) || 1
+                                    )
+                                )
                             )
                         })
                     }
@@ -1355,10 +1426,10 @@ const stopProgression = () => {
                 setOpen(false);
                 setNewChord({
                     name:"",
-                    octave:4,
-                    beats:1,
+                    octave:"4",
+                    beats:"1",
                     instrument:"acoustic_grand_piano",
-                    wait:0
+                    wait:"0"
                 });
             }}
         >
