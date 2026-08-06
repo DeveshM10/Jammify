@@ -776,35 +776,37 @@ const playAllTracks = async () => {
 
 
 
-    currentBeatRef.current += 1;
-    if(currentBeatRef.current >= beatsPerBarRef.current){
-
-        currentBeatRef.current = 0;
-
-        chordBeatRef.current++;
-
-        const currentChord =
-            tracksRef.current[0]
-            ?.chords[playheadRef.current];
+    chordBeatRef.current++;
 
 
-        if(
-            !currentChord ||
-            chordBeatRef.current >= currentChord.beats
-        ){
+    const currentChord =
+        tracksRef.current[0]
+        ?.chords[playheadRef.current];
 
-            chordBeatRef.current = 0;
 
-            playheadRef.current++;
+    if(
+        !currentChord ||
+        chordBeatRef.current >= currentChord.beats
+    ){
 
-            if(playheadRef.current >= maxLength){
-                playheadRef.current = 0;
-            }
+        chordBeatRef.current = 0;
 
+        playheadRef.current++;
+
+        if(playheadRef.current >= maxLength){
+            playheadRef.current = 0;
         }
 
     }
-    
+
+
+    currentBeatRef.current++;
+
+    if(
+        currentBeatRef.current >= beatsPerBarRef.current
+    ){
+        currentBeatRef.current = 0;
+    }    
     setPlayhead(playheadRef.current);
 
     
