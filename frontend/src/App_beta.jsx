@@ -740,31 +740,13 @@ const playAllTracks = async () => {
 
     if (chordsAtStep.length > 0) {
 
-        const repetitions = Math.max(
-            1,
-            Math.floor(
-                beatsPerBarRef.current /
-                chordsAtStep[0].beats
-            )
+        stopAllNotes();
+
+        await playStep(chordsAtStep);
+
+        await sleep(
+            (60 / bpmRef.current) * 1000
         );
-
-
-        for (let i = 0; i < repetitions; i++) {
-
-            if (!playingRef.current) break;
-
-            stopAllNotes();
-
-            await playStep(chordsAtStep);
-            if (!playingRef.current) break;
-
-            await sleep(
-                (60 / bpmRef.current) * 1000
-            );
-
-            if (!playingRef.current) break;
-
-        }
 
     }
     else {
