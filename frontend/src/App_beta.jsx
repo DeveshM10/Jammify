@@ -457,7 +457,7 @@ const deleteTrack = (id) => {
 
   });
 
-  playheadRef.current = 0;
+  currentStepRef.current = 0;
   setPlayhead(0);
 
 };
@@ -649,8 +649,9 @@ const playStep = async (chords) => {
   // Playback
 
   // const currentIndexRef = useRef(0);
-  const playheadRef = useRef(0);
-  const chordBeatRef = useRef(0);
+  const currentStepRef = useRef(0);
+  const currentBeatInStepRef = useRef(0);
+  const playbackStateRef = useRef({});
   const playingRef = useRef(false);
   const currentBeatRef = useRef(0);
   const pausedRef = useRef(false);
@@ -693,6 +694,15 @@ const playAllTracks = async () => {
   pausedRef.current = false;
   setIsPlaying(true);
 
+  // Initialize playback state for each track
+    playbackStateRef.current = {};
+
+    tracksRef.current.forEach(track => {
+        playbackStateRef.current[track.id] = {
+            step: 0,
+            beat: 0
+        };
+    });
 
   while(
     playingRef.current &&
@@ -719,7 +729,7 @@ const playAllTracks = async () => {
     }
 
 
-    const step = playheadRef.current;
+    const step = currentStepRef.current;
 
     const chordsAtStep = tracksRef.current
     .filter(track =>
@@ -758,7 +768,7 @@ const playAllTracks = async () => {
     if (chordsAtStep.length > 0) {
 
         // only trigger chord on first beat
-        if(chordBeatRef.current === 0){
+        if(currentBeatInStepRef.current === 0){
 
             stopAllNotes();
 
@@ -793,18 +803,18 @@ const playAllTracks = async () => {
 
 
 
-    chordBeatRef.current++;
+    currentBeatInStepRef.current++;
 
     if(
-        chordBeatRef.current >= currentChordBeatsRef.current
+        currentBeatInStepRef.current >= currentChordBeatsRef.current
     ){
 
-        chordBeatRef.current = 0;
+        currentBeatInStepRef.current = 0;
 
-        playheadRef.current++;
+        currentStepRef.current++;
 
-        if(playheadRef.current >= maxLength){
-            playheadRef.current = 0;
+        if(currentStepRef.current >= maxLength){
+            currentStepRef.current = 0;
         }
 
     }
@@ -818,7 +828,7 @@ const playAllTracks = async () => {
         currentBeatRef.current = 0;
     }
 
-    setPlayhead(playheadRef.current);
+    setPlayhead(currentStepRef.current);
 
     
 
@@ -891,7 +901,7 @@ const stopProgression = () => {
 
 
   // reset position
-  playheadRef.current = 0;
+  currentStepRef.current = 0;
   setPlayhead(0);
 
 
