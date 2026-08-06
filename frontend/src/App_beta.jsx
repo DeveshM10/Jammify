@@ -51,14 +51,9 @@ import {
 const instruments = [
     "acoustic_grand_piano",
     "electric_grand_piano",
-    "rock_organ",
     "church_organ",
-    "clean_electric_guitar",
-    "overdriven_guitar",
-    "distortion_guitar",
-    "guitar_harmonics",
     "finger_bass"
-]
+];
 
 
 
