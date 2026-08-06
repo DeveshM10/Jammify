@@ -218,6 +218,16 @@ function App() {
     danger: "#FF6B8A",
   };
 
+  const trackColors = [
+    "#6D4AFF",
+    "#FF6B8A",
+    "#00B894",
+    "#0984E3",
+    "#FDCB6E",
+    "#E17055",
+    "#A29BFE"
+    ];
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
         activationConstraint: {
@@ -358,19 +368,18 @@ const changeTrackVolume = (id, volume) => {
 
 
 
-  const addTrack = () => {
+const addTrack = () => {
 
-    const newTrack = {
-        id: Date.now(),
-        name: `Track ${tracks.length + 1}`,
-        chords: [],
-        muted: false,
-        volume: 0.8
-    };
-
-    setTracks([
-        ...tracks,
-        newTrack
+    setTracks(prev => [
+        ...prev,
+        {
+            id: Date.now(),
+            name: `Track ${prev.length + 1}`,
+            chords: [],
+            muted: false,
+            volume: 0.8,
+            color: trackColors[prev.length % trackColors.length]
+        }
     ]);
 
 };
@@ -1026,9 +1035,10 @@ const stopProgression = () => {
             gap:15,
             padding:10,
             borderRadius:12,
+            borderLeft:`6px solid ${track.color}`,
             background:
             selectedTrack === track.id
-            ? colors.primaryLight
+            ? `${track.color}22`
             : "transparent"
         }}
 
