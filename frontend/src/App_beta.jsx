@@ -18,6 +18,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import {
   DndContext,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   closestCenter
@@ -125,8 +126,8 @@ function SortableChord({
         transition:"all 0.15s ease",
 
         cursor:"grab",
-
-        userSelect:"none"
+        userSelect:"none",
+        touchAction:"none",
     };
 
 
@@ -140,6 +141,10 @@ function SortableChord({
         >
 
             <IconButton
+            size="small"
+                onPointerDown={(e)=>{
+                    e.stopPropagation();
+                }}
 
                 size="small"
 
@@ -218,9 +223,15 @@ function App() {
         activationConstraint: {
             distance: 5
         }
+    }),
+
+    useSensor(TouchSensor, {
+        activationConstraint: {
+            delay: 150,
+            tolerance: 5
+        }
     })
-);
- 
+  );
 
   const [open, setOpen] = useState(false);
   const [tracks, setTracks] = useState([]);
