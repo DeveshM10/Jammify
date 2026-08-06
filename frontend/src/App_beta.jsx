@@ -649,6 +649,7 @@ const playStep = async (chords) => {
 
   // const currentIndexRef = useRef(0);
   const playheadRef = useRef(0);
+  const chordBeatRef = useRef(0);
   const playingRef = useRef(false);
   const currentBeatRef = useRef(0);
   const pausedRef = useRef(false);
@@ -751,7 +752,6 @@ const playAllTracks = async () => {
 
         await sleep(
             (60 / bpmRef.current) *
-            chordsAtStep[0].beats *
             1000
         );
 
@@ -781,10 +781,26 @@ const playAllTracks = async () => {
 
         currentBeatRef.current = 0;
 
-        playheadRef.current++;
+        chordBeatRef.current++;
 
-        if(playheadRef.current >= maxLength){
-            playheadRef.current = 0;
+        const currentChord =
+            tracksRef.current[0]
+            ?.chords[playheadRef.current];
+
+
+        if(
+            !currentChord ||
+            chordBeatRef.current >= currentChord.beats
+        ){
+
+            chordBeatRef.current = 0;
+
+            playheadRef.current++;
+
+            if(playheadRef.current >= maxLength){
+                playheadRef.current = 0;
+            }
+
         }
 
     }
