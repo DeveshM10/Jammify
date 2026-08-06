@@ -757,9 +757,15 @@ const playAllTracks = async () => {
 
     if (chordsAtStep.length > 0) {
 
-        stopAllNotes();
+        // only trigger chord on first beat
+        if(chordBeatRef.current === 0){
 
-        await playStep(chordsAtStep);
+            stopAllNotes();
+
+            await playStep(chordsAtStep);
+
+        }
+
 
         await sleep(
             (60 / bpmRef.current) *
