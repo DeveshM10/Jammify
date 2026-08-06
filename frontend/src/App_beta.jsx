@@ -61,94 +61,158 @@ const instruments = [
 
 
 function SortableChord({
-  chord,
-  index,
-  track,
-  activeChords,
-  colors,
-  onEdit
+    chord,
+    index,
+    track,
+    activeChords,
+    colors,
+    onEdit
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({
-    id: `${track.id}-${index}`,
-  });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    width: 70,
-    height: 70,
-    borderRadius: 12,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-    cursor: "grab",
-    userSelect: "none",
-    background: activeChords.includes(`${track.id}-${chord.name}`)
-      ? colors.primary
-      : colors.card,
-    border: `2px solid ${
-      activeChords.includes(`${track.id}-${chord.name}`)
-        ? colors.primary
-        : colors.border
-    }`,
-    color: activeChords.includes(`${track.id}-${chord.name}`)
-      ? "white"
-      : colors.text,
-    boxShadow: activeChords.includes(`${track.id}-${chord.name}`)
-      ? "0 0 18px rgba(109,74,255,0.7)"
-      : "0 2px 8px rgba(0,0,0,0.05)",
-  };
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition
+    } = useSortable({
+        id: `${track.id}-${index}`
+    });
 
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-    >
-      <IconButton
-        size="small"
-        onClick={(e) => {
-          e.stopPropagation();
-          onEdit(index);
-        }}
-        sx={{
-          position: "absolute",
-          top: 2,
-          right: 2,
-          width: 26,
-          height: 26,
-        }}
-      >
-        <MoreVertIcon fontSize="small" />
-      </IconButton>
 
-      <div
-        style={{
-          fontSize: 18,
-          fontWeight: 700,
-        }}
-      >
-        {chord.name}
-      </div>
-    </div>
-  );
+    const active = activeChords.includes(
+        `${track.id}-${chord.name}`
+    );
+
+
+    const style = {
+
+        transform: CSS.Transform.toString(transform),
+
+        transition,
+
+        width:70,
+        height:70,
+
+        background: active
+            ? colors.primary
+            : colors.card,
+
+        border:`2px solid ${
+            active
+                ? colors.primary
+                : colors.border
+        }`,
+
+        color: active
+            ? "white"
+            : colors.text,
+
+        borderRadius:12,
+
+        display:"flex",
+        flexDirection:"column",
+        alignItems:"center",
+        justifyContent:"center",
+
+        position:"relative",
+
+        boxShadow: active
+            ? "0 0 18px rgba(109,74,255,0.7)"
+            : "0 2px 8px rgba(0,0,0,0.05)",
+
+        transition:"all 0.15s ease",
+
+        cursor:"grab",
+
+        userSelect:"none"
+    };
+
+
+    return (
+
+        <div
+            ref={setNodeRef}
+            style={style}
+            {...attributes}
+            {...listeners}
+        >
+
+            <IconButton
+
+                size="small"
+
+                onClick={(e)=>{
+
+                    e.stopPropagation();
+
+                    onEdit(index);
+
+                }}
+
+                sx={{
+                    position:"absolute",
+                    top:2,
+                    right:2,
+                    width:26,
+                    height:26,
+                    color:active
+                        ? "white"
+                        : colors.text,
+                    opacity:0.7,
+
+                    "&:hover":{
+                        opacity:1,
+                        backgroundColor:colors.primaryLight
+                    }
+                }}
+
+            >
+
+                <MoreVertIcon fontSize="small"/>
+
+            </IconButton>
+
+
+            <div
+                style={{
+                    fontSize:18,
+                    fontWeight:700,
+                    color:active
+                        ? "white"
+                        : colors.text
+                }}
+            >
+
+                {chord.name}
+
+            </div>
+
+
+        </div>
+
+    );
+
 }
 
 
 function App() {
 
+  const colors = {
+    background: "#F7F5FF",
+    primary: "#6D4AFF",
+    primaryLight: "#EDE7FF",
+    card: "#FFFFFF",
+    border: "#D8CCFF",
+    text: "#372580",
+    danger: "#FF6B8A",
+  };
+
+
     // render
     const API_URL = "https://jammify-3.onrender.com";
     
+ 
 
   const [open, setOpen] = useState(false);
   const [tracks, setTracks] = useState([]);
@@ -174,64 +238,56 @@ function App() {
     });
 
     
-  const colors = {
-    background: "#F7F5FF",
-    primary: "#6D4AFF",
-    primaryLight: "#EDE7FF",
-    card: "#FFFFFF",
-    border: "#D8CCFF",
-    text: "#372580",
-    danger: "#FF6B8A",
-  };
+const handleDragEnd = (trackId, event)=>{
 
-  const sensors = useSensors(
-  useSensor(PointerSensor, {
-    activationConstraint: {
-      distance: 5,
-    },
-  })
-  );
+    const {
+        active,
+        over
+    } = event;
 
-  const handleDragEnd = (trackId,event)=>{
 
-    const {active,over}=event;
+    if(!over) return;
 
-        if(!over) return;
 
-        if(active.id===over.id) return;
+    if(active.id === over.id)
+        return;
 
-        setTracks(prev=>
 
-            prev.map(track=>{
+    setTracks(prev =>
 
-                if(track.id!==trackId)
-                    return track;
+        prev.map(track=>{
 
-                const oldIndex=
-                    Number(active.id.split("-")[1]);
 
-                const newIndex=
-                    Number(over.id.split("-")[1]);
+            if(track.id !== trackId)
+                return track;
 
-                return{
 
-                    ...track,
+            const oldIndex =
+                Number(active.id.split("-")[1]);
 
-                    chords:arrayMove(
-                        track.chords,
-                        oldIndex,
-                        newIndex
-                    )
 
-                };
+            const newIndex =
+                Number(over.id.split("-")[1]);
 
-            })
 
-        );
+            return {
 
-    };
+                ...track,
+
+                chords: arrayMove(
+                    track.chords,
+                    oldIndex,
+                    newIndex
+                )
+
+            };
+
+        })
+
+    );
+
+};
     
-
 
   const [newChord, setNewChord] = useState({
   name: "",
@@ -1031,15 +1087,6 @@ const stopProgression = () => {
             </div>
 
 
-        <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={(event) => handleDragEnd(track.id, event)}
-        >
-        <SortableContext
-            items={track.chords.map((_, i) => `${track.id}-${i}`)}
-            strategy={horizontalListSortingStrategy}
-        ></SortableContext>
 
         <div
             style={{
@@ -1064,111 +1111,94 @@ const stopProgression = () => {
 
 
 
+        <DndContext
+
+            sensors={sensors}
+
+            collisionDetection={closestCenter}
+
+            onDragEnd={(event)=>
+                handleDragEnd(track.id,event)
+            }
+
+        >
+
+
+        <SortableContext
+
+            items={
+                track.chords.map(
+                    (_,i)=>`${track.id}-${i}`
+                )
+            }
+
+            strategy={
+                horizontalListSortingStrategy
+            }
+
+        >
+
+
         {
-        track.chords.map((c, i) => (
+        track.chords.map((c,i)=>(
 
-            <SortableChord
-                key={`${track.id}-${i}`}
-                chord={c}
-                index={i}
-                track={track}
-            >
 
-            {({ attributes, listeners }) => (
+        <SortableChord
 
-                <div
-                    {...attributes}
-                    {...listeners}
-                    style={{
-                        width:70,
-                        height:70,
+            key={`${track.id}-${i}`}
 
-                        background: activeChords.includes(`${track.id}-${c.name}`)
-                            ? colors.primary
-                            : colors.card,
+            chord={c}
 
-                        border:`2px solid ${
-                            activeChords.includes(`${track.id}-${c.name}`)
-                                ? colors.primary
-                                : colors.border
-                        }`,
+            index={i}
 
-                        color: activeChords.includes(`${track.id}-${c.name}`)
-                            ? "white"
-                            : colors.text,
+            track={track}
 
-                        borderRadius:12,
-                        display:"flex",
-                        flexDirection:"column",
-                        alignItems:"center",
-                        justifyContent:"center",
-                        position:"relative",
-                        boxShadow: activeChords.includes(`${track.id}-${c.name}`)
-                            ? "0 0 18px rgba(109,74,255,0.7)"
-                            : "0 2px 8px rgba(0,0,0,0.05)",
-                        transition:"all 0.15s ease",
-                        cursor:"grab"
-                    }}
-                >
+            activeChords={activeChords}
 
-                    <IconButton
-                        size="small"
-                        onClick={(e) => {
-                            e.stopPropagation();
+            colors={colors}
 
-                            setSelectedChord({
-                                trackId: track.id,
-                                index: i
-                            });
+            onEdit={(index)=>{
 
-                            setEditChord({
-                                ...c,
-                                octave: String(c.octave),
-                                beats: String(c.beats),
-                                wait: String(c.wait)
-                            });
-                        }}
-                        sx={{
-                            position: "absolute",
-                            top: 2,
-                            right: 2,
-                            width: 26,
-                            height: 26,
-                            color: activeChords.includes(`${track.id}-${c.name}`)
-                                ? "white"
-                                : colors.text,
-                            opacity: 0.7,
-                            "&:hover": {
-                                opacity: 1,
-                                backgroundColor: colors.primaryLight
-                            }
-                        }}
-                    >
-                        <MoreVertIcon fontSize="small" />
-                    </IconButton>
 
-                    <div
-                        style={{
-                            fontSize:18,
-                            fontWeight:700,
-                            color: activeChords.includes(`${track.id}-${c.name}`)
-                                ? "white"
-                                : colors.text,
-                            textAlign:"center",
-                            userSelect:"none"
-                        }}
-                    >
-                        {c.name}
-                    </div>
+                setSelectedChord({
 
-                </div>
+                    trackId:track.id,
 
-            )}
+                    index
 
-            </SortableChord>
+                });
+
+
+                const chord =
+                    track.chords[index];
+
+
+                setEditChord({
+
+                    ...chord,
+
+                    octave:String(chord.octave),
+
+                    beats:String(chord.beats),
+
+                    wait:String(chord.wait)
+
+                });
+
+
+            }}
+
+        />
+
 
         ))
         }
+
+
+        </SortableContext>
+
+
+        </DndContext>
 
 
         <div
