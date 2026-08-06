@@ -15,6 +15,24 @@ import {
 import IconButton from "@mui/material/IconButton";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter
+} from "@dnd-kit/core";
+
+import {
+  SortableContext,
+  useSortable,
+  horizontalListSortingStrategy,
+  arrayMove
+} from "@dnd-kit/sortable";
+
+import { CSS } from "@dnd-kit/utilities";
+
+
 
 import {
     chordToMidi
@@ -42,25 +60,95 @@ const instruments = [
 ]
 
 
+function SortableChord({
+  chord,
+  index,
+  track,
+  activeChords,
+  colors,
+  onEdit
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({
+    id: `${track.id}-${index}`,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    width: 70,
+    height: 70,
+    borderRadius: 12,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    cursor: "grab",
+    userSelect: "none",
+    background: activeChords.includes(`${track.id}-${chord.name}`)
+      ? colors.primary
+      : colors.card,
+    border: `2px solid ${
+      activeChords.includes(`${track.id}-${chord.name}`)
+        ? colors.primary
+        : colors.border
+    }`,
+    color: activeChords.includes(`${track.id}-${chord.name}`)
+      ? "white"
+      : colors.text,
+    boxShadow: activeChords.includes(`${track.id}-${chord.name}`)
+      ? "0 0 18px rgba(109,74,255,0.7)"
+      : "0 2px 8px rgba(0,0,0,0.05)",
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+    >
+      <IconButton
+        size="small"
+        onClick={(e) => {
+          e.stopPropagation();
+          onEdit(index);
+        }}
+        sx={{
+          position: "absolute",
+          top: 2,
+          right: 2,
+          width: 26,
+          height: 26,
+        }}
+      >
+        <MoreVertIcon fontSize="small" />
+      </IconButton>
+
+      <div
+        style={{
+          fontSize: 18,
+          fontWeight: 700,
+        }}
+      >
+        {chord.name}
+      </div>
+    </div>
+  );
+}
 
 
 function App() {
 
-  const colors = {
-    background: "#F7F5FF",
-    primary: "#6D4AFF",
-    primaryLight: "#EDE7FF",
-    card: "#FFFFFF",
-    border: "#D8CCFF",
-    text: "#372580",
-    danger: "#FF6B8A",
-  };
-
-
     // render
     const API_URL = "https://jammify-3.onrender.com";
     
- 
 
   const [open, setOpen] = useState(false);
   const [tracks, setTracks] = useState([]);
@@ -86,8 +174,64 @@ function App() {
     });
 
     
+  const colors = {
+    background: "#F7F5FF",
+    primary: "#6D4AFF",
+    primaryLight: "#EDE7FF",
+    card: "#FFFFFF",
+    border: "#D8CCFF",
+    text: "#372580",
+    danger: "#FF6B8A",
+  };
 
+  const sensors = useSensors(
+  useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 5,
+    },
+  })
+  );
+
+  const handleDragEnd = (trackId,event)=>{
+
+    const {active,over}=event;
+
+        if(!over) return;
+
+        if(active.id===over.id) return;
+
+        setTracks(prev=>
+
+            prev.map(track=>{
+
+                if(track.id!==trackId)
+                    return track;
+
+                const oldIndex=
+                    Number(active.id.split("-")[1]);
+
+                const newIndex=
+                    Number(over.id.split("-")[1]);
+
+                return{
+
+                    ...track,
+
+                    chords:arrayMove(
+                        track.chords,
+                        oldIndex,
+                        newIndex
+                    )
+
+                };
+
+            })
+
+        );
+
+    };
     
+
 
   const [newChord, setNewChord] = useState({
   name: "",
@@ -887,6 +1031,15 @@ const stopProgression = () => {
             </div>
 
 
+        <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={(event) => handleDragEnd(track.id, event)}
+        >
+        <SortableContext
+            items={track.chords.map((_, i) => `${track.id}-${i}`)}
+            strategy={horizontalListSortingStrategy}
+        ></SortableContext>
 
         <div
             style={{
@@ -912,94 +1065,107 @@ const stopProgression = () => {
 
 
         {
-        track.chords.map((c,i)=>(
+        track.chords.map((c, i) => (
 
-        <div
-            key={i}
-            style={{
-                width:70,
-                height:70,
-
-                background: activeChords.includes(`${track.id}-${c.name}`)
-                    ? colors.primary
-                    : colors.card,
-
-                border:`2px solid ${
-                    activeChords.includes(`${track.id}-${c.name}`)
-                        ? colors.primary
-                        : colors.border
-                }`,
-
-                color: activeChords.includes(`${track.id}-${c.name}`)
-                    ? "white"
-                    : colors.text,
-
-                borderRadius:12,
-                display:"flex",
-                flexDirection:"column",
-                alignItems:"center",
-                justifyContent:"center",
-                position:"relative",
-                boxShadow: activeChords.includes(`${track.id}-${c.name}`)
-                    ? "0 0 18px rgba(109,74,255,0.7)"
-                    : "0 2px 8px rgba(0,0,0,0.05)",
-                transition:"all 0.15s ease",
-                cursor:"pointer"
-            }}
+            <SortableChord
+                key={`${track.id}-${i}`}
+                chord={c}
+                index={i}
+                track={track}
             >
-            
-            <IconButton
-                size="small"
-                onClick={(e) => {
-                    e.stopPropagation();
 
-                    setSelectedChord({
-                        trackId: track.id,
-                        index: i
-                    });
+            {({ attributes, listeners }) => (
 
-                    setEditChord({
-                        ...c,
-                        octave: String(c.octave),
-                        beats: String(c.beats),
-                        wait: String(c.wait)
-                    });
-                }}
-                sx={{
-                    position: "absolute",
-                    top: 2,
-                    right: 2,
-                    width: 26,
-                    height: 26,
-                    color: activeChords.includes(`${track.id}-${c.name}`)
-                        ? "white"
-                        : colors.text,
-                    opacity: 0.7,
-                    "&:hover": {
-                        opacity: 1,
-                        backgroundColor: colors.primaryLight
-                    }
-                }}
-            >
-                <MoreVertIcon fontSize="small" />
-            </IconButton>
+                <div
+                    {...attributes}
+                    {...listeners}
+                    style={{
+                        width:70,
+                        height:70,
 
-            <div
-                style={{
-                    fontSize: 18,
-                    fontWeight: 700,
-                    color: colors.text,
-                    textAlign: "center",
-                    userSelect: "none"
-                }}
-            >
-                {c.name}
-            </div>
+                        background: activeChords.includes(`${track.id}-${c.name}`)
+                            ? colors.primary
+                            : colors.card,
 
+                        border:`2px solid ${
+                            activeChords.includes(`${track.id}-${c.name}`)
+                                ? colors.primary
+                                : colors.border
+                        }`,
 
+                        color: activeChords.includes(`${track.id}-${c.name}`)
+                            ? "white"
+                            : colors.text,
 
-            </div>
+                        borderRadius:12,
+                        display:"flex",
+                        flexDirection:"column",
+                        alignItems:"center",
+                        justifyContent:"center",
+                        position:"relative",
+                        boxShadow: activeChords.includes(`${track.id}-${c.name}`)
+                            ? "0 0 18px rgba(109,74,255,0.7)"
+                            : "0 2px 8px rgba(0,0,0,0.05)",
+                        transition:"all 0.15s ease",
+                        cursor:"grab"
+                    }}
+                >
 
+                    <IconButton
+                        size="small"
+                        onClick={(e) => {
+                            e.stopPropagation();
+
+                            setSelectedChord({
+                                trackId: track.id,
+                                index: i
+                            });
+
+                            setEditChord({
+                                ...c,
+                                octave: String(c.octave),
+                                beats: String(c.beats),
+                                wait: String(c.wait)
+                            });
+                        }}
+                        sx={{
+                            position: "absolute",
+                            top: 2,
+                            right: 2,
+                            width: 26,
+                            height: 26,
+                            color: activeChords.includes(`${track.id}-${c.name}`)
+                                ? "white"
+                                : colors.text,
+                            opacity: 0.7,
+                            "&:hover": {
+                                opacity: 1,
+                                backgroundColor: colors.primaryLight
+                            }
+                        }}
+                    >
+                        <MoreVertIcon fontSize="small" />
+                    </IconButton>
+
+                    <div
+                        style={{
+                            fontSize:18,
+                            fontWeight:700,
+                            color: activeChords.includes(`${track.id}-${c.name}`)
+                                ? "white"
+                                : colors.text,
+                            textAlign:"center",
+                            userSelect:"none"
+                        }}
+                    >
+                        {c.name}
+                    </div>
+
+                </div>
+
+            )}
+
+            </SortableChord>
 
         ))
         }
