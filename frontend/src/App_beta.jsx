@@ -650,6 +650,7 @@ const playStep = async (chords) => {
   // const currentIndexRef = useRef(0);
   const playheadRef = useRef(0);
   const playingRef = useRef(false);
+  const currentBeatRef = useRef(0);
   const pausedRef = useRef(false);
   const timerRef = useRef(null);
 
@@ -718,18 +719,22 @@ const playAllTracks = async () => {
 
     const step = playheadRef.current;
 
-
     const chordsAtStep = tracksRef.current
     .filter(track =>
         track.chords.length > 0 &&
         !track.muted
     )
-    .map(track => ({
-        ...track.chords[step % track.chords.length],
-        volume: track.volume,
-        trackId: track.id
-    })
-    );
+    .map(track => {
+
+        const chord = track.chords[step % track.chords.length];
+
+        return {
+            ...chord,
+            volume: track.volume,
+            trackId: track.id
+        };
+
+    });
 
 
 
@@ -745,10 +750,10 @@ const playAllTracks = async () => {
         await playStep(chordsAtStep);
 
         await sleep(
-    (60 / bpmRef.current) *
-    chordsAtStep[0].beats *
-    1000
-);
+            (60 / bpmRef.current) *
+            chordsAtStep[0].beats *
+            1000
+        );
 
     }
     else {
@@ -771,9 +776,17 @@ const playAllTracks = async () => {
 
 
 
-    playheadRef.current++;
-    if(playheadRef.current >= maxLength){
-        playheadRef.current = 0;
+    currentBeatRef.current += 1;
+    if(currentBeatRef.current >= beatsPerBarRef.current){
+
+        currentBeatRef.current = 0;
+
+        playheadRef.current++;
+
+        if(playheadRef.current >= maxLength){
+            playheadRef.current = 0;
+        }
+
     }
     
     setPlayhead(playheadRef.current);
