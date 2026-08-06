@@ -61,7 +61,7 @@ const baseUrls = {
     finger_bass:
         "https://tonejs.github.io/audio/bass-electric/",
     rock_guitar:
-        "utils/rock_guitar/"
+        "/rock_guitar/"
 
 };
 
