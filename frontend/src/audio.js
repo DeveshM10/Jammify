@@ -4,6 +4,7 @@ let activeVoices = [];
 let instruments = {};
 let trackGains = {};
 let trackSamplers = {};
+let trackInstruments = {};
 let initialized = false;
 
 
@@ -165,20 +166,28 @@ export async function playChord(
     }
 
 
-    if(!trackSamplers[trackId]){
+    if(
+    !trackSamplers[trackId] ||
+    trackInstruments[trackId] !== instrument
+    ){
 
         const sampler =
             await loadInstrument(
                 instrument
             );
 
-        trackSamplers[trackId] = sampler;
 
         sampler.disconnect();
+
 
         sampler.connect(
             trackGains[trackId]
         );
+
+
+        trackSamplers[trackId] = sampler;
+
+        trackInstruments[trackId] = instrument;
 
     }
 
