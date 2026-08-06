@@ -249,6 +249,8 @@ function App() {
 
   const [trackMenuAnchor, setTrackMenuAnchor] = useState(null);
   const [menuTrackId, setMenuTrackId] = useState(null);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameTrackName, setRenameTrackName] = useState("");
 
   const [tempoDialogOpen, setTempoDialogOpen] = useState(false);
   const [beatsPerBar, setBeatsPerBar] = useState(4);
@@ -416,6 +418,27 @@ const duplicateTrack = (id) => {
 
 };
 
+const renameTrack = () => {
+
+    if (!menuTrackId || !renameTrackName.trim()) {
+        return;
+    }
+
+    setTracks(prev =>
+        prev.map(track =>
+            track.id === menuTrackId
+                ? {
+                    ...track,
+                    name: renameTrackName.trim()
+                }
+                : track
+        )
+    );
+
+    setRenameDialogOpen(false);
+    setRenameTrackName("");
+
+};
 
 
 const deleteTrack = (id) => {
@@ -1701,6 +1724,58 @@ const stopProgression = () => {
     </DialogActions>
 </Dialog>
 
+<Dialog
+    open={renameDialogOpen}
+    onClose={()=>{
+        setRenameDialogOpen(false);
+    }}
+>
+
+    <DialogTitle>
+        Rename Track
+    </DialogTitle>
+
+
+    <DialogContent>
+
+        <TextField
+            autoFocus
+            fullWidth
+            label="Track Name"
+            value={renameTrackName}
+            onChange={(e)=>
+                setRenameTrackName(e.target.value)
+            }
+            sx={{
+                mt:1
+            }}
+        />
+
+    </DialogContent>
+
+
+    <DialogActions>
+
+        <Button
+            onClick={()=>{
+                setRenameDialogOpen(false);
+            }}
+        >
+            Cancel
+        </Button>
+
+
+        <Button
+            variant="contained"
+            onClick={renameTrack}
+        >
+            Save
+        </Button>
+
+    </DialogActions>
+
+</Dialog>
+
 
 
 <Menu
@@ -1711,6 +1786,26 @@ const stopProgression = () => {
         setMenuTrackId(null);
     }}
 >
+
+<MenuItem
+    onClick={()=>{
+
+        const track = tracks.find(
+            t => t.id === menuTrackId
+        );
+
+        setRenameTrackName(
+            track?.name || ""
+        );
+
+        setRenameDialogOpen(true);
+
+        setTrackMenuAnchor(null);
+
+    }}
+>
+    Rename Track
+</MenuItem>
 
 <MenuItem
     onClick={()=>{
