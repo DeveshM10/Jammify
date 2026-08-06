@@ -256,6 +256,7 @@ function App() {
   const [chordInput, setChordInput] = useState("");
   
   const [selectedChord, setSelectedChord] = useState(null);
+  const currentChordBeatsRef = useRef(1);
   const [editChord, setEditChord] = useState({
     name: "",
     octave: "4",
@@ -737,9 +738,19 @@ const playAllTracks = async () => {
 
     });
 
+    if(chordsAtStep.length > 0){
+
+        currentChordBeatsRef.current =
+            Math.max(
+                ...chordsAtStep.map(c => c.beats)
+            );
+
+    }
+
 
 
     console.log("STEP:", step, chordsAtStep);
+
 
 
     try {
@@ -778,15 +789,8 @@ const playAllTracks = async () => {
 
     chordBeatRef.current++;
 
-
-    const currentChord =
-        tracksRef.current[0]
-        ?.chords[playheadRef.current];
-
-
     if(
-        !currentChord ||
-        chordBeatRef.current >= currentChord.beats
+        chordBeatRef.current >= currentChordBeatsRef.current
     ){
 
         chordBeatRef.current = 0;
@@ -806,7 +810,8 @@ const playAllTracks = async () => {
         currentBeatRef.current >= beatsPerBarRef.current
     ){
         currentBeatRef.current = 0;
-    }    
+    }
+
     setPlayhead(playheadRef.current);
 
     
