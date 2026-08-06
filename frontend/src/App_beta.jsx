@@ -60,6 +60,7 @@ const instruments = [
 ]
 
 
+
 function SortableChord({
     chord,
     index,
@@ -198,7 +199,11 @@ function SortableChord({
 
 function App() {
 
-  const colors = {
+
+    // render
+    const API_URL = "https://jammify-3.onrender.com";
+    
+    const colors = {
     background: "#F7F5FF",
     primary: "#6D4AFF",
     primaryLight: "#EDE7FF",
@@ -208,10 +213,13 @@ function App() {
     danger: "#FF6B8A",
   };
 
-
-    // render
-    const API_URL = "https://jammify-3.onrender.com";
-    
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+        activationConstraint: {
+            distance: 5
+        }
+    })
+);
  
 
   const [open, setOpen] = useState(false);
