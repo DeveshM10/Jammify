@@ -15,6 +15,25 @@ import {
 import IconButton from "@mui/material/IconButton";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  closestCenter
+} from "@dnd-kit/core";
+
+import {
+  SortableContext,
+  useSortable,
+  horizontalListSortingStrategy,
+  arrayMove
+} from "@dnd-kit/sortable";
+
+import { CSS } from "@dnd-kit/utilities";
+
+
 
 import {
     chordToMidi
@@ -33,15 +52,159 @@ const instruments = [
     "acoustic_grand_piano",
     "electric_grand_piano",
     "church_organ",
-    "finger_bass"
+    "finger_bass",
+    "rock_guitar"
 ];
 
 
 
+function SortableChord({
+    chord,
+    index,
+    track,
+    activeChords,
+    colors,
+    onEdit
+}) {
+
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition
+    } = useSortable({
+        id: `${track.id}-${index}`
+    });
+
+
+    const active = activeChords.includes(
+        `${track.id}-${chord.name}`
+    );
+
+
+    const style = {
+
+        transform: CSS.Transform.toString(transform),
+
+        transition,
+
+        width:70,
+        height:70,
+
+        background: active
+            ? colors.primary
+            : colors.card,
+
+        border:`2px solid ${
+            active
+                ? colors.primary
+                : colors.border
+        }`,
+
+        color: active
+            ? "white"
+            : colors.text,
+
+        borderRadius:12,
+
+        display:"flex",
+        flexDirection:"column",
+        alignItems:"center",
+        justifyContent:"center",
+
+        position:"relative",
+
+        boxShadow: active
+            ? "0 0 18px rgba(109,74,255,0.7)"
+            : "0 2px 8px rgba(0,0,0,0.05)",
+
+        transition:"all 0.15s ease",
+
+        cursor:"grab",
+        userSelect:"none",
+        touchAction:"none",
+    };
+
+
+    return (
+
+        <div
+            ref={setNodeRef}
+            style={style}
+            {...attributes}
+            {...listeners}
+        >
+
+            <IconButton
+            size="small"
+                onPointerDown={(e)=>{
+                    e.stopPropagation();
+                }}
+
+                size="small"
+
+                onClick={(e)=>{
+
+                    e.stopPropagation();
+
+                    onEdit(index);
+
+                }}
+
+                sx={{
+                    position:"absolute",
+                    top:2,
+                    right:2,
+                    width:26,
+                    height:26,
+                    color:active
+                        ? "white"
+                        : colors.text,
+                    opacity:0.7,
+
+                    "&:hover":{
+                        opacity:1,
+                        backgroundColor:colors.primaryLight
+                    }
+                }}
+
+            >
+
+                <MoreVertIcon fontSize="small"/>
+
+            </IconButton>
+
+
+            <div
+                style={{
+                    fontSize:18,
+                    fontWeight:700,
+                    color:active
+                        ? "white"
+                        : colors.text
+                }}
+            >
+
+                {chord.name}
+
+            </div>
+
+
+        </div>
+
+    );
+
+}
+
 
 function App() {
 
-  const colors = {
+
+    // render
+    const API_URL = "https://jammify-3.onrender.com";
+    
+    const colors = {
     background: "#F7F5FF",
     primary: "#6D4AFF",
     primaryLight: "#EDE7FF",
@@ -51,11 +214,30 @@ function App() {
     danger: "#FF6B8A",
   };
 
+  const trackColors = [
+    "#6D4AFF",
+    "#FF6B8A",
+    "#00B894",
+    "#0984E3",
+    "#FDCB6E",
+    "#E17055",
+    "#A29BFE"
+    ];
 
-    // render
-    const API_URL = "https://jammify-3.onrender.com";
-    
- 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+        activationConstraint: {
+            distance: 5
+        }
+    }),
+
+    useSensor(TouchSensor, {
+        activationConstraint: {
+            delay: 150,
+            tolerance: 5
+        }
+    })
+  );
 
   const [open, setOpen] = useState(false);
   const [tracks, setTracks] = useState([]);
@@ -63,6 +245,8 @@ function App() {
 
   const [trackMenuAnchor, setTrackMenuAnchor] = useState(null);
   const [menuTrackId, setMenuTrackId] = useState(null);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameTrackName, setRenameTrackName] = useState("");
 
   const [tempoDialogOpen, setTempoDialogOpen] = useState(false);
   const [beatsPerBar, setBeatsPerBar] = useState(4);
@@ -81,7 +265,55 @@ function App() {
     });
 
     
+const handleDragEnd = (trackId, event)=>{
 
+    const {
+        active,
+        over
+    } = event;
+
+
+    if(!over) return;
+
+
+    if(active.id === over.id)
+        return;
+
+
+    setTracks(prev =>
+
+        prev.map(track=>{
+
+
+            if(track.id !== trackId)
+                return track;
+
+
+            const oldIndex =
+                Number(active.id.split("-")[1]);
+
+
+            const newIndex =
+                Number(over.id.split("-")[1]);
+
+
+            return {
+
+                ...track,
+
+                chords: arrayMove(
+                    track.chords,
+                    oldIndex,
+                    newIndex
+                )
+
+            };
+
+        })
+
+    );
+
+};
     
 
   const [newChord, setNewChord] = useState({
@@ -91,6 +323,8 @@ function App() {
   instrument: "acoustic_grand_piano",
   wait: "0"
     });
+
+  const [activeChords, setActiveChords] = useState([]);
 
   const [mode, setMode] = useState("normal");
   const modeRef = useRef("normal");
@@ -112,6 +346,10 @@ function App() {
         beatsPerBarRef.current = beatsPerBar;
     }, [beatsPerBar]);
 
+    
+
+
+
 const changeTrackVolume = (id, volume) => {
     setTracks(prev =>
         prev.map(track =>
@@ -128,19 +366,18 @@ const changeTrackVolume = (id, volume) => {
 
 
 
-  const addTrack = () => {
+const addTrack = () => {
 
-    const newTrack = {
-        id: Date.now(),
-        name: `Track ${tracks.length + 1}`,
-        chords: [],
-        muted: false,
-        volume: 0.8
-    };
-
-    setTracks([
-        ...tracks,
-        newTrack
+    setTracks(prev => [
+        ...prev,
+        {
+            id: Date.now(),
+            name: `Track ${prev.length + 1}`,
+            chords: [],
+            muted: false,
+            volume: 0.8,
+            color: trackColors[prev.length % trackColors.length]
+        }
     ]);
 
 };
@@ -177,6 +414,27 @@ const duplicateTrack = (id) => {
 
 };
 
+const renameTrack = () => {
+
+    if (!menuTrackId || !renameTrackName.trim()) {
+        return;
+    }
+
+    setTracks(prev =>
+        prev.map(track =>
+            track.id === menuTrackId
+                ? {
+                    ...track,
+                    name: renameTrackName.trim()
+                }
+                : track
+        )
+    );
+
+    setRenameDialogOpen(false);
+    setRenameTrackName("");
+
+};
 
 
 const deleteTrack = (id) => {
@@ -347,36 +605,38 @@ const saveTempo = async () => {
 
 
 
-const playStep = async (chords)=>{
+const playStep = async (chords) => {
+
+    setActiveChords(
+        chords.map(chord => `${chord.trackId}-${chord.name}`)
+    );
 
     await Promise.all(
-        chords.map(chord =>
-            new Promise(resolve => {
+        chords.map(async chord => {
 
-                setTimeout(()=>{
+            const midiNotes =
+                chordToMidi(
+                    chord.name,
+                    chord.octave
+                );
 
-                    const midiNotes =
-                        chordToMidi(
-                            chord.name,
-                            chord.octave
-                        );
+            await playChord(
+                midiNotes,
+                chord.beats,
+                bpmRef.current,
+                chord.volume,
+                chord.instrument,
+                chord.trackId,
+                chord.wait
+            );
 
-                    playChord(
-                        midiNotes,
-                        chord.beats,
-                        bpmRef.current,
-                        chord.volume,
-                        chord.instrument,
-                        chord.trackId
-                    );
-
-                    resolve();
-
-                }, chord.wait * 1000);
-
-            })
-        )
+        })
     );
+
+    // remove highlight after playing
+    setTimeout(() => {
+        setActiveChords([]);
+    }, (60 / bpmRef.current) * 1000);
 
 };
 
@@ -528,14 +788,13 @@ const playAllTracks = async () => {
 
 
     playheadRef.current++;
+    if(playheadRef.current >= maxLength){
+        playheadRef.current = 0;
+    }
+    
     setPlayhead(playheadRef.current);
 
-
-    if(playheadRef.current >= maxLength){
-
-      playheadRef.current = 0;
-
-    }
+    
 
 
   }
@@ -551,6 +810,9 @@ const playAllTracks = async () => {
 const startPlayback = async () => {
 
     await unlockAudio();
+    
+    // Give WebAudio time to wake up
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     if (playingRef.current) {
 
@@ -792,9 +1054,10 @@ const stopProgression = () => {
             gap:15,
             padding:10,
             borderRadius:12,
+            borderLeft:`6px solid ${track.color}`,
             background:
             selectedTrack === track.id
-            ? colors.primaryLight
+            ? `${track.color}22`
             : "transparent"
         }}
 
@@ -881,98 +1144,109 @@ const stopProgression = () => {
             }}
             >
 
-            {isPlaying && (
             <div
-            style={{
-            position:"absolute",
-            left:`${playhead * 80}px`,
-            top:-5,
-            height:80,
-            width:3,
-            background:colors.primary,
-            transition:`left ${60000 / bpmRef.current}ms linear`,
-            zIndex:5
-            }}
+                style={{
+                    position:"absolute",
+                    left:`${(playhead % Math.max(track.chords.length, 1)) * 80 + (isPlaying ? 70 : 0)}px`,
+                    top:-5,
+                    height:80,
+                    width:3,
+                    background:colors.primary,
+                    transition:`left ${60000 / bpmRef.current}ms linear`,
+                    zIndex:5
+                }}
             />
-            )}
 
+
+
+        <DndContext
+
+            sensors={sensors}
+
+            collisionDetection={closestCenter}
+
+            onDragEnd={(event)=>
+                handleDragEnd(track.id,event)
+            }
+
+        >
+
+
+        <SortableContext
+
+            items={
+                track.chords.map(
+                    (_,i)=>`${track.id}-${i}`
+                )
+            }
+
+            strategy={
+                horizontalListSortingStrategy
+            }
+
+        >
 
 
         {
         track.chords.map((c,i)=>(
 
-        <div
-            key={i}
-            style={{
-            width:70,
-            height:70,
-            background:colors.card,
-            border:`2px solid ${colors.border}`,
-            borderRadius:12,
-            display:"flex",
-            flexDirection:"column",
-            alignItems:"center",
-            justifyContent:"center",
-            position:"relative",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-            transition: "all 0.15s ease",
-            cursor: "pointer"
+
+        <SortableChord
+
+            key={`${track.id}-${i}`}
+
+            chord={c}
+
+            index={i}
+
+            track={track}
+
+            activeChords={activeChords}
+
+            colors={colors}
+
+            onEdit={(index)=>{
+
+
+                setSelectedChord({
+
+                    trackId:track.id,
+
+                    index
+
+                });
+
+
+                const chord =
+                    track.chords[index];
+
+
+                setEditChord({
+
+                    ...chord,
+
+                    octave:String(chord.octave),
+
+                    beats:String(chord.beats),
+
+                    wait:String(chord.wait)
+
+                });
+
+
             }}
-            >
-            
-            <IconButton
-                size="small"
-                onClick={(e) => {
-                    e.stopPropagation();
 
-                    setSelectedChord({
-                        trackId: track.id,
-                        index: i
-                    });
-
-                    setEditChord({
-                        ...c,
-                        octave: String(c.octave),
-                        beats: String(c.beats),
-                        wait: String(c.wait)
-                    });
-                }}
-                sx={{
-                    position: "absolute",
-                    top: 2,
-                    right: 2,
-                    width: 26,
-                    height: 26,
-                    color: colors.text,
-                    opacity: 0.7,
-                    "&:hover": {
-                        opacity: 1,
-                        backgroundColor: colors.primaryLight
-                    }
-                }}
-            >
-                <MoreVertIcon fontSize="small" />
-            </IconButton>
-
-            <div
-                style={{
-                    fontSize: 18,
-                    fontWeight: 700,
-                    color: colors.text,
-                    textAlign: "center",
-                    userSelect: "none"
-                }}
-            >
-                {c.name}
-            </div>
-
-
-
-            </div>
+        />
 
 
         ))
         }
+
+
+        </SortableContext>
+
+
+        </DndContext>
 
 
         <div
@@ -1446,6 +1720,58 @@ const stopProgression = () => {
     </DialogActions>
 </Dialog>
 
+<Dialog
+    open={renameDialogOpen}
+    onClose={()=>{
+        setRenameDialogOpen(false);
+    }}
+>
+
+    <DialogTitle>
+        Rename Track
+    </DialogTitle>
+
+
+    <DialogContent>
+
+        <TextField
+            autoFocus
+            fullWidth
+            label="Track Name"
+            value={renameTrackName}
+            onChange={(e)=>
+                setRenameTrackName(e.target.value)
+            }
+            sx={{
+                mt:1
+            }}
+        />
+
+    </DialogContent>
+
+
+    <DialogActions>
+
+        <Button
+            onClick={()=>{
+                setRenameDialogOpen(false);
+            }}
+        >
+            Cancel
+        </Button>
+
+
+        <Button
+            variant="contained"
+            onClick={renameTrack}
+        >
+            Save
+        </Button>
+
+    </DialogActions>
+
+</Dialog>
+
 
 
 <Menu
@@ -1456,6 +1782,26 @@ const stopProgression = () => {
         setMenuTrackId(null);
     }}
 >
+
+<MenuItem
+    onClick={()=>{
+
+        const track = tracks.find(
+            t => t.id === menuTrackId
+        );
+
+        setRenameTrackName(
+            track?.name || ""
+        );
+
+        setRenameDialogOpen(true);
+
+        setTrackMenuAnchor(null);
+
+    }}
+>
+    Rename Track
+</MenuItem>
 
 <MenuItem
     onClick={()=>{
