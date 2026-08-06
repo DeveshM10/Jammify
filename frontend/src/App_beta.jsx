@@ -79,7 +79,7 @@ function SortableChord({
 
 
     const active = activeChords.includes(
-        `${track.id}-${chord.name}`
+        `${track.id}-${index}`
     );
 
 
@@ -137,13 +137,10 @@ function SortableChord({
         >
 
             <IconButton
-            size="small"
+                size="small"
                 onPointerDown={(e)=>{
                     e.stopPropagation();
                 }}
-
-                size="small"
-
                 onClick={(e)=>{
 
                     e.stopPropagation();
@@ -609,7 +606,9 @@ const saveTempo = async () => {
 const playStep = async (chords) => {
 
     setActiveChords(
-        chords.map(chord => `${chord.trackId}-${chord.name}`)
+        chords.map(chord =>
+            `${chord.trackId}-${chord.state.step}`
+        )
     );
 
     await Promise.all(
@@ -698,11 +697,16 @@ const playAllTracks = async () => {
     playbackStateRef.current = {};
 
     tracksRef.current.forEach(track => {
+
         playbackStateRef.current[track.id] = {
-            step: 0,
-            beat: 0
+
+            trackId: track.id,
+            step:0,
+            beat:0
         };
     });
+
+
 
   while(
     playingRef.current &&
@@ -762,7 +766,7 @@ const chordsAtStep = tracksRef.current
 
 
 
-    console.log("STEP:", step, chordsAtStep);
+    console.log(playbackStateRef.current, chordsAtStep);
 
 
 
@@ -771,7 +775,12 @@ const chordsAtStep = tracksRef.current
     if (chordsAtStep.length > 0) {
 
         // only trigger chord on first beat
-        if(currentBeatInStepRef.current === 0){
+        const shouldPlay = chordsAtStep.some(
+            chord => chord.state.beat === 0
+        );
+
+
+        if(shouldPlay){
 
             stopAllNotes();
 
@@ -806,21 +815,35 @@ const chordsAtStep = tracksRef.current
 
 
 
-    currentBeatInStepRef.current++;
+    Object.values(playbackStateRef.current)
+    .forEach(state => {
 
-    if(
-        currentBeatInStepRef.current >= currentChordBeatsRef.current
-    ){
+        const track = tracksRef.current.find(
+            t => t.id === state.trackId
+        );
 
-        currentBeatInStepRef.current = 0;
+        if(!track || track.chords.length === 0)
+            return;
 
-        currentStepRef.current++;
 
-        if(currentStepRef.current >= maxLength){
-            currentStepRef.current = 0;
+        const chord = track.chords[state.step];
+
+        state.beat++;
+
+
+        if(state.beat >= chord.beats){
+
+            state.beat = 0;
+
+            state.step++;
+
+            if(state.step >= track.chords.length){
+                state.step = 0;
+            }
+
         }
 
-    }
+    });
 
 
     currentBeatRef.current++;
@@ -831,7 +854,12 @@ const chordsAtStep = tracksRef.current
         currentBeatRef.current = 0;
     }
 
-    setPlayhead(currentStepRef.current);
+    setPlayhead(
+        Math.min(
+            ...Object.values(playbackStateRef.current)
+            .map(s => s.step)
+        )
+    );
 
     
 
