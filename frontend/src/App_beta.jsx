@@ -745,8 +745,10 @@ const playAllTracks = async () => {
         await playStep(chordsAtStep);
 
         await sleep(
-            (60 / bpmRef.current) * 1000
-        );
+    (60 / bpmRef.current) *
+    chordsAtStep[0].beats *
+    1000
+);
 
     }
     else {
