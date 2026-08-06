@@ -16,14 +16,12 @@ const instrumentUrls = {
         "F#4": "Fs4.mp3",
         "A4": "A4.mp3",
     },
-
     electric_grand_piano: {
         "C4": "C4.mp3",
         "D#4": "Ds4.mp3",
         "F#4": "Fs4.mp3",
         "A4": "A4.mp3",
     },
-
     church_organ: {
         "C4": "C4.mp3",
         "F4": "F4.mp3",
