@@ -52,7 +52,8 @@ const instruments = [
     "acoustic_grand_piano",
     "electric_grand_piano",
     "church_organ",
-    "finger_bass"
+    "finger_bass",
+    "rock_guitar"
 ];
 
 

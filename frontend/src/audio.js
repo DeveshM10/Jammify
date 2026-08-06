@@ -33,6 +33,15 @@ const instrumentUrls = {
         "A2": "A2.mp3",
         "D3": "D3.mp3",
         "G3": "G3.mp3",
+    },
+
+    rock_guitar: {
+        "E2": "E2.wav",
+        "A2": "A2.wav",
+        "D3": "D3.wav",
+        "G3": "G3.wav",
+        "B3": "B3.wav",
+        "E4": "E4.wav",
     }
 
 };
@@ -50,7 +59,9 @@ const baseUrls = {
         "https://tonejs.github.io/audio/Organ/",
 
     finger_bass:
-        "https://tonejs.github.io/audio/bass-electric/"
+        "https://tonejs.github.io/audio/bass-electric/",
+    rock_guitar:
+        "utils/rock_guitar/"
 
 };
 
