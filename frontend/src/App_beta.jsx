@@ -729,25 +729,28 @@ const playAllTracks = async () => {
     }
 
 
-    const step = currentStepRef.current;
-
-    const chordsAtStep = tracksRef.current
+const chordsAtStep = tracksRef.current
     .filter(track =>
         track.chords.length > 0 &&
         !track.muted
     )
     .map(track => {
 
-        const chord = track.chords[step % track.chords.length];
+        const state = playbackStateRef.current[track.id];
+
+        const chord = track.chords[state.step];
 
         return {
             ...chord,
             volume: track.volume,
-            trackId: track.id
+            trackId: track.id,
+            state
         };
 
     });
 
+
+    
     if(chordsAtStep.length > 0){
 
         currentChordBeatsRef.current =
