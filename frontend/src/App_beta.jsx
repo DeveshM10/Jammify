@@ -610,20 +610,26 @@ const saveTempo = async () => {
 
 const playStep = async (chords) => {
 
-    // Highlight the chords currently starting
+    /*
+     * Highlight only the chords that
+     * are actually starting now.
+     */
     setActiveChords(
-        chords.map(chord =>
-            `${chord.trackId}-${chord.state.step}`
+        chords.map(
+            chord => chord.id
         )
     );
+
 
     await Promise.all(
         chords.map(async chord => {
 
-            const midiNotes = chordToMidi(
-                chord.name,
-                chord.octave
-            );
+            const midiNotes =
+                chordToMidi(
+                    chord.name,
+                    chord.octave
+                );
+
 
             await playChord(
                 midiNotes,
@@ -631,16 +637,22 @@ const playStep = async (chords) => {
                 bpmRef.current,
                 chord.volume,
                 chord.instrument,
-                chord.trackId,
-                chord.wait
+                chord.trackId
             );
 
         })
     );
 
-    // Remove visual highlight
+
+    /*
+     * Visual highlight lasts one beat.
+     *
+     * This does NOT stop the audio.
+     */
     setTimeout(() => {
+
         setActiveChords([]);
+
     }, (60 / bpmRef.current) * 1000);
 };
 
@@ -786,8 +798,6 @@ const playAllTracks = async () => {
         try {
 
             if (shouldPlay) {
-
-                stopAllNotes();
 
                 await playStep(chordsToPlay);
 
