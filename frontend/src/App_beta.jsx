@@ -602,9 +602,9 @@ const saveTempo = async () => {
 };
 
 
-
 const playStep = async (chords) => {
 
+    // Highlight the chords currently starting
     setActiveChords(
         chords.map(chord =>
             `${chord.trackId}-${chord.state.step}`
@@ -614,11 +614,10 @@ const playStep = async (chords) => {
     await Promise.all(
         chords.map(async chord => {
 
-            const midiNotes =
-                chordToMidi(
-                    chord.name,
-                    chord.octave
-                );
+            const midiNotes = chordToMidi(
+                chord.name,
+                chord.octave
+            );
 
             await playChord(
                 midiNotes,
@@ -633,11 +632,10 @@ const playStep = async (chords) => {
         })
     );
 
-    // remove highlight after playing
+    // Remove visual highlight
     setTimeout(() => {
         setActiveChords([]);
     }, (60 / bpmRef.current) * 1000);
-
 };
 
 
@@ -683,192 +681,242 @@ const playStep = async (chords) => {
 
 const playAllTracks = async () => {
 
-  if (playingRef.current)
-    return;
+    if (playingRef.current) {
+        return;
+    }
 
+    const playbackId = ++playbackIdRef.current;
 
-  const playbackId = ++playbackIdRef.current;
+    playingRef.current = true;
+    pausedRef.current = false;
 
-  playingRef.current = true;
-  pausedRef.current = false;
-  setIsPlaying(true);
+    setIsPlaying(true);
 
-  // Initialize playback state for each track
+    // Reset playback state
     playbackStateRef.current = {};
 
     tracksRef.current.forEach(track => {
 
         playbackStateRef.current[track.id] = {
-
             trackId: track.id,
-            step:0,
-            beat:0
-        };
-    });
-
-
-
-  while(
-    playingRef.current &&
-    playbackId === playbackIdRef.current
-  ){
-
-    const maxLength = Math.max(
-    0,
-        ...tracksRef.current.map(
-        t => t.chords.length
-        )
-    );
-
-    if(maxLength === 0){
-        await sleep(50);
-        continue;
-    }
-
-    if(pausedRef.current){
-
-      await sleep(100);
-      continue;
-
-    }
-
-
-const chordsAtStep = tracksRef.current
-    .filter(track =>
-        track.chords.length > 0 &&
-        !track.muted
-    )
-    .map(track => {
-
-        const state = playbackStateRef.current[track.id];
-
-        const chord = track.chords[state.step];
-
-        return {
-            ...chord,
-            volume: track.volume,
-            trackId: track.id,
-            state
+            step: 0,
+            beat: 0
         };
 
     });
 
+    currentBeatRef.current = 0;
+    setPlayhead(0);
 
-    
-    if(chordsAtStep.length > 0){
 
-        currentChordBeatsRef.current =
-            Math.max(
-                ...chordsAtStep.map(c => c.beats)
+    while (
+        playingRef.current &&
+        playbackId === playbackIdRef.current
+    ) {
+
+        // Pause
+        if (pausedRef.current) {
+
+            await sleep(100);
+
+            continue;
+        }
+
+
+        const maxLength = Math.max(
+            0,
+            ...tracksRef.current.map(
+                track => track.chords.length
+            )
+        );
+
+
+        // Nothing to play
+        if (maxLength === 0) {
+
+            await sleep(50);
+
+            continue;
+        }
+
+
+        /*
+         * Get the current chord from every track.
+         */
+        const chordsAtStep = tracksRef.current
+            .filter(track =>
+                track.chords.length > 0 &&
+                !track.muted
+            )
+            .map(track => {
+
+                const state =
+                    playbackStateRef.current[track.id];
+
+                const chord =
+                    track.chords[state.step];
+
+                return {
+                    ...chord,
+                    volume: track.volume,
+                    trackId: track.id,
+                    state
+                };
+
+            });
+
+
+        /*
+         * Determine whether at least one track
+         * is starting a new chord.
+         */
+        const shouldPlay =
+            chordsAtStep.some(
+                chord => chord.state.beat === 0
             );
 
-    }
 
+        try {
 
+            if (shouldPlay) {
 
-    console.log(playbackStateRef.current, chordsAtStep);
+                stopAllNotes();
 
+                await playStep(chordsAtStep);
 
-
-    try {
-
-    if (chordsAtStep.length > 0) {
-
-        // only trigger chord on first beat
-        const shouldPlay = chordsAtStep.some(
-            chord => chord.state.beat === 0
-        );
-
-
-        if(shouldPlay){
-
-            stopAllNotes();
-
-            await playStep(chordsAtStep);
-
-        }
-
-
-        await sleep(
-            (60 / bpmRef.current) *
-            1000
-        );
-
-    }
-    else {
-
-        await sleep(50);
-        if (!playingRef.current) break;
-
-    }
-
-    }
-    catch(error){
-
-    if(error.name === "AbortError"){
-        break;
-    }
-
-    console.error(error);
-
-    }
-
-
-
-    Object.values(playbackStateRef.current)
-    .forEach(state => {
-
-        const track = tracksRef.current.find(
-            t => t.id === state.trackId
-        );
-
-        if(!track || track.chords.length === 0)
-            return;
-
-
-        const chord = track.chords[state.step];
-
-        state.beat++;
-
-
-        if(state.beat >= chord.beats){
-
-            state.beat = 0;
-
-            state.step++;
-
-            if(state.step >= track.chords.length){
-                state.step = 0;
             }
 
+
+            /*
+             * One beat.
+             */
+            await sleep(
+                (60 / bpmRef.current) * 1000
+            );
+
+        }
+        catch (error) {
+
+            if (error.name === "AbortError") {
+                break;
+            }
+
+            console.error(
+                "Playback error:",
+                error
+            );
+
         }
 
-    });
+
+        /*
+         * Advance every track independently.
+         */
+        Object.values(
+            playbackStateRef.current
+        ).forEach(state => {
+
+            const track =
+                tracksRef.current.find(
+                    track =>
+                        track.id === state.trackId
+                );
 
 
-    currentBeatRef.current++;
+            if (
+                !track ||
+                track.chords.length === 0
+            ) {
+                return;
+            }
 
-    if(
-        currentBeatRef.current >= beatsPerBarRef.current
-    ){
-        currentBeatRef.current = 0;
+
+            const chord =
+                track.chords[state.step];
+
+
+            state.beat++;
+
+
+            /*
+             * Move to the next chord when
+             * this chord has finished.
+             */
+            if (state.beat >= chord.beats) {
+
+                state.beat = 0;
+
+                state.step++;
+
+                /*
+                 * Loop back to first chord.
+                 */
+                if (
+                    state.step >=
+                    track.chords.length
+                ) {
+
+                    state.step = 0;
+
+                }
+
+            }
+
+        });
+
+
+        /*
+         * Advance global beat.
+         */
+        currentBeatRef.current++;
+
+
+        if (
+            currentBeatRef.current >=
+            beatsPerBarRef.current
+        ) {
+
+            currentBeatRef.current = 0;
+
+        }
+
+
+        /*
+         * Move visual playhead.
+         */
+        const states =
+            Object.values(
+                playbackStateRef.current
+            );
+
+
+        if (states.length > 0) {
+
+            setPlayhead(
+                Math.min(
+                    ...states.map(
+                        state => state.step
+                    )
+                )
+            );
+
+        }
+
     }
 
-    setPlayhead(
-        Math.min(
-            ...Object.values(playbackStateRef.current)
-            .map(s => s.step)
-        )
-    );
 
-    
+    /*
+     * Playback ended normally.
+     */
+    if (
+        playbackId ===
+        playbackIdRef.current
+    ) {
 
+        playingRef.current = false;
 
-  }
+        setIsPlaying(false);
 
-
-  if (playbackId === playbackIdRef.current) {
-    setIsPlaying(false);
     }
 
 };
@@ -876,19 +924,40 @@ const chordsAtStep = tracksRef.current
 
 const startPlayback = async () => {
 
+    /*
+     * Unlock Web Audio after the user's
+     * button click.
+     */
     await unlockAudio();
-    
-    // Give WebAudio time to wake up
-    await new Promise(resolve => setTimeout(resolve, 100));
 
+
+    /*
+     * Give the AudioContext a moment
+     * to become active.
+     */
+    await new Promise(resolve =>
+        setTimeout(resolve, 100)
+    );
+
+
+    /*
+     * If playback is already running,
+     * this means the user is resuming
+     * from pause.
+     */
     if (playingRef.current) {
 
         pausedRef.current = false;
-        setIsPlaying(true);
-        return;
 
+        setIsPlaying(true);
+
+        return;
     }
 
+
+    /*
+     * Start a completely new playback.
+     */
     playAllTracks();
 
 };
@@ -896,14 +965,28 @@ const startPlayback = async () => {
 
 
 
+const pauseProgression = () => {
 
-  const pauseProgression = () => {
-
+    /*
+     * Tell the playback loop to pause.
+     */
     pausedRef.current = true;
+
+
+    /*
+     * Immediately stop currently
+     * sounding notes.
+     */
     stopAllNotes();
+
+
+    /*
+     * Change the UI from Pause
+     * back to Play.
+     */
     setIsPlaying(false);
 
-  };
+};
 
 
 const stopProgression = () => {
