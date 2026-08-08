@@ -258,6 +258,7 @@ function App() {
     name: "",
     octave: "4",
     beats: "1",
+    repeat: "1",
     instrument: "acoustic_grand_piano",
     wait: "0"
     });
@@ -318,6 +319,7 @@ const handleDragEnd = (trackId, event)=>{
   name: "",
   octave: "4",
   beats: "1",
+  repeat: "1",
   instrument: "acoustic_grand_piano",
   wait: "0"
     });
@@ -493,6 +495,7 @@ const addChordToTrack = () => {
                 // convert back to numbers
                 octave: Number(newChord.octave),
                 beats: Number(newChord.beats),
+                repeat: Number(newChord.repeat),
                 wait: Number(newChord.wait)
               }
             ]
@@ -506,6 +509,7 @@ const addChordToTrack = () => {
     name: "",
     octave: "4",
     beats: "1",
+    repeat: "1",
     instrument: "acoustic_grand_piano",
     wait: "0"
   });
@@ -548,6 +552,7 @@ const editChordData = () => {
                                 // convert strings back to numbers
                                 octave: Number(editChord.octave),
                                 beats: Number(editChord.beats),
+                                repeat: Number(editChord.repeat),
                                 wait: Number(editChord.wait)
                             }
                             : chord
@@ -563,6 +568,7 @@ const editChordData = () => {
         name: "",
         octave: "4",
         beats: "1",
+        repeat: "1",
         instrument: "acoustic_grand_piano",
         wait: "0"
     });
@@ -700,7 +706,8 @@ const playAllTracks = async () => {
         playbackStateRef.current[track.id] = {
             trackId: track.id,
             step: 0,
-            beat: 0
+            beat: 0,
+            repeat: 0
         };
 
     });
@@ -770,11 +777,11 @@ const playAllTracks = async () => {
          * Determine whether at least one track
          * is starting a new chord.
          */
-        const shouldPlay =
-            chordsAtStep.some(
-                chord => chord.state.beat === 0
-            );
+        const chordsToPlay = chordsAtStep.filter(
+            chord => chord.state.beat === 0
+        );
 
+        const shouldPlay = chordsToPlay.length > 0;
 
         try {
 
@@ -782,7 +789,7 @@ const playAllTracks = async () => {
 
                 stopAllNotes();
 
-                await playStep(chordsAtStep);
+                await playStep(chordsToPlay);
 
             }
 
@@ -842,21 +849,33 @@ const playAllTracks = async () => {
              * Move to the next chord when
              * this chord has finished.
              */
+            
             if (state.beat >= chord.beats) {
 
                 state.beat = 0;
 
-                state.step++;
+                state.repeat++;
 
-                /*
-                 * Loop back to first chord.
-                 */
-                if (
-                    state.step >=
-                    track.chords.length
-                ) {
+                const repeatCount = Math.max(
+                    1,
+                    Number(chord.repeat) || 1
+                );
 
-                    state.step = 0;
+
+                if (state.repeat >= repeatCount) {
+
+                    state.repeat = 0;
+
+                    state.step++;
+
+                    if (
+                        state.step >=
+                        track.chords.length
+                    ) {
+
+                        state.step = 0;
+
+                    }
 
                 }
 
@@ -1379,6 +1398,8 @@ const stopProgression = () => {
 
                     beats:String(chord.beats),
 
+                    repeat: String(chord.repeat ?? 1),
+
                     wait:String(chord.wait)
 
                 });
@@ -1407,6 +1428,7 @@ const stopProgression = () => {
             name: "",
             octave: "4",
             beats: "1",
+            repeat: "1",
             instrument: "acoustic_grand_piano",
             wait: "0"
         });
@@ -1609,6 +1631,41 @@ const stopProgression = () => {
                     />
                 </Grid>
 
+                <Grid size={6}>
+                    <TextField
+                        fullWidth
+                        label="Repeat"
+                        type="number"
+                        value={editChord.repeat}
+                        inputProps={{
+                            min: 1,
+                            max: 16,
+                            step: 1,
+                            inputMode: "numeric"
+                        }}
+                        onChange={(e) =>
+                            setEditChord({
+                                ...editChord,
+                                repeat: e.target.value
+                            })
+                        }
+                        onBlur={() =>
+                            setEditChord({
+                                ...editChord,
+                                repeat: String(
+                                    Math.min(
+                                        16,
+                                        Math.max(
+                                            1,
+                                            Number(editChord.repeat) || 1
+                                        )
+                                    )
+                                )
+                            })
+                        }
+                    />
+                </Grid>
+
                 <Grid size={12}>
                     <TextField
                         select
@@ -1783,6 +1840,40 @@ const stopProgression = () => {
                 />
             </Grid>
 
+            <Grid size={6}>
+                <TextField
+                    type="number"
+                    fullWidth
+                    label="Repeat"
+                    inputProps={{
+                        min: 1,
+                        max: 16,
+                        step: 1
+                    }}
+                    value={newChord.repeat}
+                    onChange={(e) =>
+                        setNewChord({
+                            ...newChord,
+                            repeat: e.target.value
+                        })
+                    }
+                    onBlur={() =>
+                        setNewChord({
+                            ...newChord,
+                            repeat: String(
+                                Math.min(
+                                    16,
+                                    Math.max(
+                                        1,
+                                        Number(newChord.repeat) || 1
+                                    )
+                                )
+                            )
+                        })
+                    }
+                />
+            </Grid>
+
             <Grid size={12}>
                 <TextField
                     select
@@ -1849,6 +1940,7 @@ const stopProgression = () => {
                     name:"",
                     octave:"4",
                     beats:"1",
+                    repeat: "1",
                     instrument:"acoustic_grand_piano",
                     wait:"0"
                 });
