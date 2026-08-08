@@ -330,6 +330,7 @@ const handleDragEnd = (trackId, event)=>{
   const modeRef = useRef("normal");
 
   const [playhead, setPlayhead] = useState(0);
+  const [playhead, setPlayhead] = useState(0);
   
 
   const [bpm, setBpm] = useState("120");
@@ -457,7 +458,20 @@ const deleteTrack = (id) => {
   });
 
   currentStepRef.current = 0;
-  setPlayhead(0);
+
+    setTrackPlayheads(() => {
+
+        const reset = {};
+
+        tracksRef.current.forEach(track => {
+
+            reset[track.id] = 0;
+
+        });
+
+        return reset;
+
+    });
 
 };
 
@@ -611,13 +625,14 @@ const saveTempo = async () => {
 const playStep = async (chords) => {
 
     /*
-     * Highlight only the chords that
-     * are actually starting now.
+     * Highlight the actual chord blocks that
+     * are starting on this beat.
+     *
+     * The UI uses IDs in the form:
+     * `${track.id}-${chordIndex}`
      */
     setActiveChords(
-        chords.map(
-            chord => chord.id
-        )
+        chords.map(chord => chord.uiId)
     );
 
 
@@ -645,8 +660,7 @@ const playStep = async (chords) => {
 
 
     /*
-     * Visual highlight lasts one beat.
-     *
+     * Remove the visual highlight after one beat.
      * This does NOT stop the audio.
      */
     setTimeout(() => {
@@ -654,8 +668,8 @@ const playStep = async (chords) => {
         setActiveChords([]);
 
     }, (60 / bpmRef.current) * 1000);
-};
 
+};
 
 
 
@@ -772,14 +786,26 @@ const playAllTracks = async () => {
                 const state =
                     playbackStateRef.current[track.id];
 
+                const chordIndex = state.step;
+
                 const chord =
-                    track.chords[state.step];
+                    track.chords[chordIndex];
 
                 return {
                     ...chord,
+
                     volume: track.volume,
+
                     trackId: track.id,
-                    state
+
+                    state,
+
+                    /*
+                    * This is the ID used by SortableChord
+                    * for its active state.
+                    */
+                    uiId: `${track.id}-${chordIndex}`
+
                 };
 
             });
@@ -910,26 +936,19 @@ const playAllTracks = async () => {
         }
 
 
-        /*
-         * Move visual playhead.
-         */
-        const states =
-            Object.values(
-                playbackStateRef.current
-            );
+        setTrackPlayheads(prev => {
 
+            const next = { ...prev };
 
-        if (states.length > 0) {
+            Object.values(playbackStateRef.current).forEach(state => {
 
-            setPlayhead(
-                Math.min(
-                    ...states.map(
-                        state => state.step
-                    )
-                )
-            );
+                next[state.trackId] = state.step;
 
-        }
+            });
+
+            return next;
+
+        });
 
     }
 
@@ -1326,7 +1345,13 @@ const stopProgression = () => {
             <div
                 style={{
                     position:"absolute",
-                    left:`${(playhead % Math.max(track.chords.length, 1)) * 80 + (isPlaying ? 70 : 0)}px`,
+                    left:`${
+                        (
+                            (trackPlayheads[track.id] ?? 0) %
+                            Math.max(track.chords.length, 1)
+                        ) * 80
+                        + (isPlaying ? 70 : 0)
+                    }px`,
                     top:-5,
                     height:80,
                     width:3,
