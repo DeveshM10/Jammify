@@ -330,6 +330,7 @@ const handleDragEnd = (trackId, event)=>{
   const modeRef = useRef("normal");
 
   const [playhead, setPlayhead] = useState(0);
+  const [trackPlayheads, setTrackPlayheads] = useState({});
   
 
   const [bpm, setBpm] = useState("120");
