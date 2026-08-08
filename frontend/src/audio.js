@@ -7,39 +7,39 @@ let initialized = false;
 
 const instrumentUrls = {
     acoustic_grand_piano: {
-        C4: "C4.mp3",
-        D#4: "Ds4.mp3",
-        F#4: "Fs4.mp3",
-        A4: "A4.mp3",
+        "C4": "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        "A4": "A4.mp3",
     },
 
     electric_grand_piano: {
-        C4: "C4.mp3",
-        D#4: "Ds4.mp3",
-        F#4: "Fs4.mp3",
-        A4: "A4.mp3",
+        "C4": "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        "A4": "A4.mp3",
     },
 
     church_organ: {
-        C4: "C4.mp3",
-        F4: "F4.mp3",
-        A4: "A4.mp3",
+        "C4": "C4.mp3",
+        "F4": "F4.mp3",
+        "A4": "A4.mp3",
     },
 
     finger_bass: {
-        E2: "E2.mp3",
-        A2: "A2.mp3",
-        D3: "D3.mp3",
-        G3: "G3.mp3",
+        "E2": "E2.mp3",
+        "A2": "A2.mp3",
+        "D3": "D3.mp3",
+        "G3": "G3.mp3",
     },
 
     rock_guitar: {
-        E2: "E2.wav",
-        A2: "A2.wav",
-        D3: "D3.wav",
-        G3: "G3.wav",
-        B3: "B3.wav",
-        E4: "E4.wav",
+        "E2": "E2.wav",
+        "A2": "A2.wav",
+        "D3": "D3.wav",
+        "G3": "G3.wav",
+        "B3": "B3.wav",
+        "E4": "E4.wav",
     }
 };
 
