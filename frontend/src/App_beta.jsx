@@ -34,10 +34,18 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 
-
+{
+/*
 import {
     chordToMidi
 } from "./chords";
+*/
+}
+
+import {
+    chordToMidi
+} from "./chords_inversion";
+
 
 import {
     unlockAudio,
@@ -257,6 +265,7 @@ function App() {
   const [editChord, setEditChord] = useState({
     name: "",
     octave: "4",
+    inversion: "0",
     beats: "1",
     repeat: "1",
     instrument: "acoustic_grand_piano",
@@ -318,6 +327,7 @@ const handleDragEnd = (trackId, event)=>{
   const [newChord, setNewChord] = useState({
   name: "",
   octave: "4",
+  inversion: "0",
   beats: "1",
   repeat: "1",
   instrument: "acoustic_grand_piano",
@@ -508,6 +518,7 @@ const addChordToTrack = () => {
 
                 // convert back to numbers
                 octave: Number(newChord.octave),
+                inversion: Number(newChord.inversion),
                 beats: Number(newChord.beats),
                 repeat: Number(newChord.repeat),
                 wait: Number(newChord.wait)
@@ -522,6 +533,7 @@ const addChordToTrack = () => {
   setNewChord({
     name: "",
     octave: "4",
+    inversion: "0",
     beats: "1",
     repeat: "1",
     instrument: "acoustic_grand_piano",
@@ -565,6 +577,7 @@ const editChordData = () => {
 
                                 // convert strings back to numbers
                                 octave: Number(editChord.octave),
+                                inversion: Number(editChord.inversion),
                                 beats: Number(editChord.beats),
                                 repeat: Number(editChord.repeat),
                                 wait: Number(editChord.wait)
@@ -581,6 +594,7 @@ const editChordData = () => {
     setEditChord({
         name: "",
         octave: "4",
+        inversion: "0",
         beats: "1",
         repeat: "1",
         instrument: "acoustic_grand_piano",
@@ -642,7 +656,8 @@ const playStep = async (chords) => {
             const midiNotes =
                 chordToMidi(
                     chord.name,
-                    chord.octave
+                    chord.octave,
+                    chord.inversion
                 );
 
 
@@ -1431,6 +1446,8 @@ const stopProgression = () => {
 
                     octave:String(chord.octave),
 
+                    inversion:String(chord.inversion),
+
                     beats:String(chord.beats),
 
                     repeat: String(chord.repeat ?? 1),
@@ -1462,6 +1479,7 @@ const stopProgression = () => {
         setNewChord({
             name: "",
             octave: "4",
+            inversion: "0",
             beats: "1",
             repeat: "1",
             instrument: "acoustic_grand_piano",
@@ -1631,6 +1649,41 @@ const stopProgression = () => {
                         }
                     />
                 </Grid>
+
+                <Grid size={6}>
+                    <TextField
+                        fullWidth
+                        label="Inversion"
+                        type="number"
+                        value={editChord.inversion}
+                        inputProps={{
+                            min:0,
+                            max:2,
+                            inputMode:"numeric"
+                        }}
+                        onChange={(e)=>
+                            setEditChord({
+                                ...editChord,
+                                inversion:e.target.value
+                            })
+                        }
+                        onBlur={()=>
+                            setEditChord({
+                                ...editChord,
+                                inversion:String(
+                                    Math.min(
+                                        2,
+                                        Math.max(
+                                            0,
+                                            Number(editChord.inversion) || 1
+                                        )
+                                    )
+                                )
+                            })
+                        }
+                    />
+                </Grid>
+
 
                 <Grid size={6}>
                     <TextField
@@ -1841,6 +1894,42 @@ const stopProgression = () => {
                 />
             </Grid>
 
+
+            <Grid size={6}>
+                <TextField
+                    type="number"
+                    fullWidth
+                    label="Inversion"
+                    inputProps={{
+                        min:0,
+                        max:2,
+                        step:1
+                    }}
+                    value={newChord.inversion}
+                    onChange={(e)=>
+                        setNewChord({
+                            ...newChord,
+                            inversion:e.target.value
+                        })
+                    }
+                    onBlur={() =>
+                        setNewChord({
+                            ...newChord,
+                            inversion:String(
+                                Math.min(
+                                    2,
+                                    Math.max(
+                                        0,
+                                        Number(newChord.inversion) || 1
+                                    )
+                                )
+                            )
+                        })
+                    }
+                />
+            </Grid>
+
+
             <Grid size={6}>
                 <TextField
                     type="number"
@@ -1974,6 +2063,7 @@ const stopProgression = () => {
                 setNewChord({
                     name:"",
                     octave:"4",
+                    inversion: "0",
                     beats:"1",
                     repeat: "1",
                     instrument:"acoustic_grand_piano",
