@@ -1796,7 +1796,7 @@ const stopProgression = () => {
                         }}
                     >
 
-                        {newChord.pattern.map((active, index) => (
+                        {editChord.pattern.map((active, index) => (
 
                             <div
                                 key={index}
