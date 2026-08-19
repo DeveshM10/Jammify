@@ -271,7 +271,8 @@ function App() {
     beats: "1",
     repeat: "1",
     instrument: "acoustic_grand_piano",
-    wait: "0"
+    wait: "0",
+    pattern: [true]
     });
 
     
@@ -333,7 +334,8 @@ const handleDragEnd = (trackId, event)=>{
   beats: "1",
   repeat: "1",
   instrument: "acoustic_grand_piano",
-  wait: "0"
+  wait: "0",
+  pattern: [true]
     });
 
   const [activeChords, setActiveChords] = useState([]);
@@ -561,6 +563,25 @@ const deleteChordFromTrack = (trackId, chordIndex) => {
 
 };
 
+
+const createPattern = (beats, existingPattern = []) => {
+
+    const length = Math.max(
+        1,
+        Number(beats) || 1
+    );
+
+    const pattern = Array.from(
+        { length },
+        (_, index) =>
+            existingPattern[index] ?? index === 0
+    );
+
+    // Always make the first beat active
+    pattern[0] = true;
+
+    return pattern;
+};
 
 
 const editChordData = () => {
@@ -832,9 +853,15 @@ const playAllTracks = async () => {
          * Determine whether at least one track
          * is starting a new chord.
          */
-        const chordsToPlay = chordsAtStep.filter(
-            chord => chord.state.beat === 0
-        );
+        const chordsToPlay = chordsAtStep.filter(chord => {
+
+            const pattern =
+                chord.pattern ||
+                createPattern(chord.beats);
+
+            return pattern[chord.state.beat] === true;
+
+        });
 
         const shouldPlay = chordsToPlay.length > 0;
 
@@ -1688,37 +1715,116 @@ const stopProgression = () => {
 
 
                 <Grid size={6}>
+
                     <TextField
+                        type="number"
                         fullWidth
                         label="Beats"
-                        type="number"
-                        value={editChord.beats}
                         inputProps={{
-                            min:1,
-                            max:16,
-                            inputMode:"numeric"
+                            min: 1,
+                            max: 16,
+                            step: 1
                         }}
-                        onChange={(e)=>
-                            setEditChord({
-                                ...editChord,
-                                beats:e.target.value
-                            })
-                        }
-                        onBlur={() =>
-                            setEditChord({
-                                ...editChord,
-                                beats:String(
-                                    Math.min(
-                                        16,
-                                        Math.max(
-                                            1,
-                                            Number(editChord.beats) || 1
-                                        )
-                                    )
+                        value={newChord.beats}
+
+                        onChange={(e) => {
+
+                            const beats = e.target.value;
+
+                            setNewChord(prev => ({
+                                ...prev,
+                                beats,
+                                pattern: createPattern(
+                                    beats,
+                                    prev.pattern
                                 )
-                            })
-                        }
+                            }));
+
+                        }}
+
+                        onBlur={() => {
+
+                            const beats = Math.min(
+                                16,
+                                Math.max(
+                                    1,
+                                    Number(newChord.beats) || 1
+                                )
+                            );
+
+                            setNewChord(prev => ({
+                                ...prev,
+                                beats: String(beats),
+                                pattern: createPattern(
+                                    beats,
+                                    prev.pattern
+                                )
+                            }));
+
+                        }}
                     />
+
+                    {/* Beat Pattern */}
+
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 10,
+                            marginTop: 12,
+                            minHeight: 20
+                        }}
+                    >
+
+                        {newChord.pattern.map((active, index) => (
+
+                            <div
+                                key={index}
+
+                                onClick={() => {
+
+                                    setNewChord(prev => ({
+                                        ...prev,
+
+                                        pattern: prev.pattern.map(
+                                            (value, i) =>
+                                                i === index
+                                                    ? !value
+                                                    : value
+                                        )
+                                    }));
+
+                                }}
+
+                                style={{
+                                    width: 14,
+                                    height: 14,
+                                    borderRadius: "50%",
+                                    backgroundColor:
+                                        active
+                                            ? colors.primary
+                                            : "white",
+
+                                    border: `2px solid ${
+                                        active
+                                            ? colors.primary
+                                            : colors.border
+                                    }`,
+
+                                    cursor: "pointer",
+
+                                    boxSizing: "border-box",
+
+                                    transition:
+                                        "all 0.15s ease"
+                                }}
+                            />
+
+                        ))}
+
+                    </div>
+
                 </Grid>
 
                 <Grid size={6}>
@@ -1933,6 +2039,7 @@ const stopProgression = () => {
 
 
             <Grid size={6}>
+
                 <TextField
                     type="number"
                     fullWidth
@@ -1943,27 +2050,105 @@ const stopProgression = () => {
                         step: 1
                     }}
                     value={newChord.beats}
-                    onChange={(e)=>
-                        setNewChord({
-                            ...newChord,
-                            beats:e.target.value
-                        })
-                    }
-                    onBlur={() =>
-                        setNewChord({
-                            ...newChord,
-                            beats:String(
-                                Math.min(
-                                    16,
-                                    Math.max(
-                                        1,
-                                        Number(newChord.beats) || 1
-                                    )
-                                )
+
+                    onChange={(e) => {
+
+                        const beats = e.target.value;
+
+                        setNewChord(prev => ({
+                            ...prev,
+                            beats,
+                            pattern: createPattern(
+                                beats,
+                                prev.pattern
                             )
-                        })
-                    }
+                        }));
+
+                    }}
+
+                    onBlur={() => {
+
+                        const beats = Math.min(
+                            16,
+                            Math.max(
+                                1,
+                                Number(newChord.beats) || 1
+                            )
+                        );
+
+                        setNewChord(prev => ({
+                            ...prev,
+                            beats: String(beats),
+                            pattern: createPattern(
+                                beats,
+                                prev.pattern
+                            )
+                        }));
+
+                    }}
                 />
+
+                {/* Beat Pattern */}
+
+                <div
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 10,
+                        marginTop: 12,
+                        minHeight: 20
+                    }}
+                >
+
+                    {newChord.pattern.map((active, index) => (
+
+                        <div
+                            key={index}
+
+                            onClick={() => {
+
+                                setNewChord(prev => ({
+                                    ...prev,
+
+                                    pattern: prev.pattern.map(
+                                        (value, i) =>
+                                            i === index
+                                                ? !value
+                                                : value
+                                    )
+                                }));
+
+                            }}
+
+                            style={{
+                                width: 14,
+                                height: 14,
+                                borderRadius: "50%",
+                                backgroundColor:
+                                    active
+                                        ? colors.primary
+                                        : "white",
+
+                                border: `2px solid ${
+                                    active
+                                        ? colors.primary
+                                        : colors.border
+                                }`,
+
+                                cursor: "pointer",
+
+                                boxSizing: "border-box",
+
+                                transition:
+                                    "all 0.15s ease"
+                            }}
+                        />
+
+                    ))}
+
+                </div>
+
             </Grid>
 
             <Grid size={6}>
