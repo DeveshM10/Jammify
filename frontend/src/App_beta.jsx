@@ -541,7 +541,8 @@ const addChordToTrack = () => {
     beats: "1",
     repeat: "1",
     instrument: "acoustic_grand_piano",
-    wait: "0"
+    wait: "0",
+    pattern: [true]
   });
 };
 
@@ -1738,7 +1739,7 @@ const stopProgression = () => {
 
                             const beats = e.target.value;
 
-                            setNewChord(prev => ({
+                            setEditChord(prev => ({
                                 ...prev,
                                 beats,
                                 pattern: createPattern(
