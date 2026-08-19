@@ -1,3 +1,5 @@
+// App beta jsx
+
 import { useRef, useState, useEffect } from "react";
 import {
   Dialog,
@@ -1693,7 +1695,7 @@ const stopProgression = () => {
                         value={editChord.beats}
                         inputProps={{
                             min:1,
-                            max:4,
+                            max:16,
                             inputMode:"numeric"
                         }}
                         onChange={(e)=>
@@ -1707,7 +1709,7 @@ const stopProgression = () => {
                                 ...editChord,
                                 beats:String(
                                     Math.min(
-                                        4,
+                                        16,
                                         Math.max(
                                             1,
                                             Number(editChord.beats) || 1
@@ -1937,7 +1939,7 @@ const stopProgression = () => {
                     label="Beats"
                     inputProps={{
                         min: 1,
-                        max: 4,
+                        max: 16,
                         step: 1
                     }}
                     value={newChord.beats}
@@ -1952,7 +1954,7 @@ const stopProgression = () => {
                             ...newChord,
                             beats:String(
                                 Math.min(
-                                    4,
+                                    16,
                                     Math.max(
                                         1,
                                         Number(newChord.beats) || 1
