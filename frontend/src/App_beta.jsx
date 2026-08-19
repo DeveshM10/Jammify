@@ -621,7 +621,8 @@ const editChordData = () => {
         beats: "1",
         repeat: "1",
         instrument: "acoustic_grand_piano",
-        wait: "0"
+        wait: "0",
+        pattern: [true]
     });
 };
 
@@ -1481,7 +1482,12 @@ const stopProgression = () => {
 
                     repeat: String(chord.repeat ?? 1),
 
-                    wait:String(chord.wait)
+                    wait:String(chord.wait),
+
+                    pattern: createPattern(
+                        chord.beats,
+                        chord.pattern
+                    )
 
                 });
 
@@ -1512,7 +1518,8 @@ const stopProgression = () => {
             beats: "1",
             repeat: "1",
             instrument: "acoustic_grand_piano",
-            wait: "0"
+            wait: "0",
+            pattern: [true]
         });
 
         setOpen(true);
@@ -1725,7 +1732,7 @@ const stopProgression = () => {
                             max: 16,
                             step: 1
                         }}
-                        value={newChord.beats}
+                        value={editChord.beats}
 
                         onChange={(e) => {
 
@@ -1748,7 +1755,7 @@ const stopProgression = () => {
                                 16,
                                 Math.max(
                                     1,
-                                    Number(newChord.beats) || 1
+                                    Number(editChord.beats) || 1
                                 )
                             );
 
@@ -2254,7 +2261,8 @@ const stopProgression = () => {
                     beats:"1",
                     repeat: "1",
                     instrument:"acoustic_grand_piano",
-                    wait:"0"
+                    wait:"0",
+                    pattern: [true]
                 });
             }}
         >
