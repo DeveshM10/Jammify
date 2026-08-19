@@ -227,7 +227,7 @@ export function updateTrackVolume(
  */
 export async function playChord(
     notes,
-    beats,
+    durationBeats,
     bpm,
     volume = 0.8,
     instrument = "acoustic_grand_piano",
@@ -297,7 +297,7 @@ export async function playChord(
             60 /
             Number(bpm)
         ) *
-        Number(beats);
+        Number(durationBeats);
 
 
     const noteNames =

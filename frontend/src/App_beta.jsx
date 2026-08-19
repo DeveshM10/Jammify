@@ -658,17 +658,9 @@ const saveTempo = async () => {
 
 const playStep = async (chords) => {
 
-    /*
-     * Highlight the actual chord blocks that
-     * are starting on this beat.
-     *
-     * The UI uses IDs in the form:
-     * `${track.id}-${chordIndex}`
-     */
     setActiveChords(
         chords.map(chord => chord.uiId)
     );
-
 
     await Promise.all(
         chords.map(async chord => {
@@ -680,11 +672,39 @@ const playStep = async (chords) => {
                     chord.inversion
                 );
 
+            const pattern =
+                chord.pattern ||
+                createPattern(chord.beats);
 
+            const currentBeat =
+                chord.state.beat;
+
+            /*
+             * Find the next retrigger point.
+             */
+            let durationBeats = 1;
+
+            for (
+                let i = currentBeat + 1;
+                i < chord.beats;
+                i++
+            ) {
+
+                if (pattern[i] === true) {
+                    break;
+                }
+
+                durationBeats++;
+            }
+
+            /*
+             * Play only until the next
+             * retrigger point, or until
+             * the chord ends.
+             */
             await playChord(
                 midiNotes,
-                //chord.beats,
-                1,
+                durationBeats,
                 bpmRef.current,
                 chord.volume,
                 chord.instrument,
@@ -694,11 +714,6 @@ const playStep = async (chords) => {
         })
     );
 
-
-    /*
-     * Remove the visual highlight after one beat.
-     * This does NOT stop the audio.
-     */
     setTimeout(() => {
 
         setActiveChords([]);
