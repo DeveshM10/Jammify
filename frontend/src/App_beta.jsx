@@ -572,16 +572,11 @@ const createPattern = (beats, existingPattern = []) => {
         Number(beats) || 1
     );
 
-    const pattern = Array.from(
+    return Array.from(
         { length },
         (_, index) =>
             existingPattern[index] ?? index === 0
     );
-
-    // Always make the first beat active
-    pattern[0] = true;
-
-    return pattern;
 };
 
 
@@ -688,7 +683,8 @@ const playStep = async (chords) => {
 
             await playChord(
                 midiNotes,
-                chord.beats,
+                //chord.beats,
+                1,
                 bpmRef.current,
                 chord.volume,
                 chord.instrument,
@@ -1760,7 +1756,7 @@ const stopProgression = () => {
                                 )
                             );
 
-                            setNewChord(prev => ({
+                            setEditChord(prev => ({
                                 ...prev,
                                 beats: String(beats),
                                 pattern: createPattern(
@@ -1792,7 +1788,7 @@ const stopProgression = () => {
 
                                 onClick={() => {
 
-                                    setNewChord(prev => ({
+                                    setEditChord(prev => ({
                                         ...prev,
 
                                         pattern: prev.pattern.map(
