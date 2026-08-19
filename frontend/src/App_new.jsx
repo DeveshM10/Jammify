@@ -1,3 +1,5 @@
+// App beta jsx
+
 import { useRef, useState, useEffect } from "react";
 import {
   Dialog,
@@ -34,10 +36,18 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 
-
+{
+/*
 import {
     chordToMidi
 } from "./chords";
+*/
+}
+
+import {
+    chordToMidi
+} from "./chords_inversion";
+
 
 import {
     unlockAudio,
@@ -79,7 +89,7 @@ function SortableChord({
 
 
     const active = activeChords.includes(
-        `${track.id}-${chord.name}`
+        `${track.id}-${index}`
     );
 
 
@@ -137,13 +147,10 @@ function SortableChord({
         >
 
             <IconButton
-            size="small"
+                size="small"
                 onPointerDown={(e)=>{
                     e.stopPropagation();
                 }}
-
-                size="small"
-
                 onClick={(e)=>{
 
                     e.stopPropagation();
@@ -256,12 +263,16 @@ function App() {
   const [chordInput, setChordInput] = useState("");
   
   const [selectedChord, setSelectedChord] = useState(null);
+  const currentChordBeatsRef = useRef(1);
   const [editChord, setEditChord] = useState({
     name: "",
     octave: "4",
+    inversion: "0",
     beats: "1",
+    repeat: "1",
     instrument: "acoustic_grand_piano",
-    wait: "0"
+    wait: "0",
+    pattern: [true]
     });
 
     
@@ -319,9 +330,12 @@ const handleDragEnd = (trackId, event)=>{
   const [newChord, setNewChord] = useState({
   name: "",
   octave: "4",
+  inversion: "0",
   beats: "1",
+  repeat: "1",
   instrument: "acoustic_grand_piano",
-  wait: "0"
+  wait: "0",
+  pattern: [true]
     });
 
   const [activeChords, setActiveChords] = useState([]);
@@ -330,6 +344,7 @@ const handleDragEnd = (trackId, event)=>{
   const modeRef = useRef("normal");
 
   const [playhead, setPlayhead] = useState(0);
+  const [trackPlayheads, setTrackPlayheads] = useState({});
   
 
   const [bpm, setBpm] = useState("120");
@@ -456,8 +471,21 @@ const deleteTrack = (id) => {
 
   });
 
-  playheadRef.current = 0;
-  setPlayhead(0);
+  currentStepRef.current = 0;
+
+    setTrackPlayheads(() => {
+
+        const reset = {};
+
+        tracksRef.current.forEach(track => {
+
+            reset[track.id] = 0;
+
+        });
+
+        return reset;
+
+    });
 
 };
 
@@ -494,7 +522,9 @@ const addChordToTrack = () => {
 
                 // convert back to numbers
                 octave: Number(newChord.octave),
+                inversion: Number(newChord.inversion),
                 beats: Number(newChord.beats),
+                repeat: Number(newChord.repeat),
                 wait: Number(newChord.wait)
               }
             ]
@@ -507,9 +537,12 @@ const addChordToTrack = () => {
   setNewChord({
     name: "",
     octave: "4",
+    inversion: "0",
     beats: "1",
+    repeat: "1",
     instrument: "acoustic_grand_piano",
-    wait: "0"
+    wait: "0",
+    pattern: [true]
   });
 };
 
@@ -532,6 +565,20 @@ const deleteChordFromTrack = (trackId, chordIndex) => {
 };
 
 
+const createPattern = (beats, existingPattern = []) => {
+
+    const length = Math.max(
+        1,
+        Number(beats) || 1
+    );
+
+    return Array.from(
+        { length },
+        (_, index) =>
+            existingPattern[index] ?? index === 0
+    );
+};
+
 
 const editChordData = () => {
 
@@ -549,7 +596,9 @@ const editChordData = () => {
 
                                 // convert strings back to numbers
                                 octave: Number(editChord.octave),
+                                inversion: Number(editChord.inversion),
                                 beats: Number(editChord.beats),
+                                repeat: Number(editChord.repeat),
                                 wait: Number(editChord.wait)
                             }
                             : chord
@@ -564,9 +613,12 @@ const editChordData = () => {
     setEditChord({
         name: "",
         octave: "4",
+        inversion: "0",
         beats: "1",
+        repeat: "1",
         instrument: "acoustic_grand_piano",
-        wait: "0"
+        wait: "0",
+        pattern: [true]
     });
 };
 
@@ -604,11 +656,10 @@ const saveTempo = async () => {
 };
 
 
-
 const playStep = async (chords) => {
 
     setActiveChords(
-        chords.map(chord => `${chord.trackId}-${chord.name}`)
+        chords.map(chord => chord.uiId)
     );
 
     await Promise.all(
@@ -617,25 +668,56 @@ const playStep = async (chords) => {
             const midiNotes =
                 chordToMidi(
                     chord.name,
-                    chord.octave
+                    chord.octave,
+                    chord.inversion
                 );
 
+            const pattern =
+                chord.pattern ||
+                createPattern(chord.beats);
+
+            const currentBeat =
+                chord.state.beat;
+
+            /*
+             * Find the next retrigger point.
+             */
+            let durationBeats = 1;
+
+            for (
+                let i = currentBeat + 1;
+                i < chord.beats;
+                i++
+            ) {
+
+                if (pattern[i] === true) {
+                    break;
+                }
+
+                durationBeats++;
+            }
+
+            /*
+             * Play only until the next
+             * retrigger point, or until
+             * the chord ends.
+             */
             await playChord(
                 midiNotes,
-                chord.beats,
+                durationBeats,
                 bpmRef.current,
                 chord.volume,
                 chord.instrument,
-                chord.trackId,
-                chord.wait
+                chord.trackId
             );
 
         })
     );
 
-    // remove highlight after playing
     setTimeout(() => {
+
         setActiveChords([]);
+
     }, (60 / bpmRef.current) * 1000);
 
 };
@@ -644,12 +726,14 @@ const playStep = async (chords) => {
 
 
 
-
   // Playback
 
   // const currentIndexRef = useRef(0);
-  const playheadRef = useRef(0);
+  const currentStepRef = useRef(0);
+  const currentBeatInStepRef = useRef(0);
+  const playbackStateRef = useRef({});
   const playingRef = useRef(false);
+  const currentBeatRef = useRef(0);
   const pausedRef = useRef(false);
   const timerRef = useRef(null);
 
@@ -680,128 +764,264 @@ const playStep = async (chords) => {
 
 const playAllTracks = async () => {
 
-  if (playingRef.current)
-    return;
-
-
-  const playbackId = ++playbackIdRef.current;
-
-  playingRef.current = true;
-  pausedRef.current = false;
-  setIsPlaying(true);
-
-
-  while(
-    playingRef.current &&
-    playbackId === playbackIdRef.current
-  ){
-
-    const maxLength = Math.max(
-    0,
-        ...tracksRef.current.map(
-        t => t.chords.length
-        )
-    );
-
-    if(maxLength === 0){
-        await sleep(50);
-        continue;
+    if (playingRef.current) {
+        return;
     }
 
-    if(pausedRef.current){
+    const playbackId = ++playbackIdRef.current;
 
-      await sleep(100);
-      continue;
+    playingRef.current = true;
+    pausedRef.current = false;
 
-    }
+    setIsPlaying(true);
 
+    // Reset playback state
+    playbackStateRef.current = {};
 
-    const step = playheadRef.current;
+    tracksRef.current.forEach(track => {
 
+        playbackStateRef.current[track.id] = {
+            trackId: track.id,
+            step: 0,
+            beat: 0,
+            repeat: 0
+        };
 
-    const chordsAtStep = tracksRef.current
-    .filter(track =>
-        track.chords.length > 0 &&
-        !track.muted
-    )
-    .map(track => ({
-        ...track.chords[step % track.chords.length],
-        volume: track.volume,
-        trackId: track.id
-    })
-    );
+    });
 
-
-
-    console.log("STEP:", step, chordsAtStep);
+    currentBeatRef.current = 0;
+    setPlayhead(0);
 
 
-    try {
+    while (
+        playingRef.current &&
+        playbackId === playbackIdRef.current
+    ) {
 
-    if (chordsAtStep.length > 0) {
+        // Pause
+        if (pausedRef.current) {
 
-        const repetitions = Math.max(
-            1,
-            Math.floor(
-                beatsPerBarRef.current /
-                chordsAtStep[0].beats
+            await sleep(100);
+
+            continue;
+        }
+
+
+        const maxLength = Math.max(
+            0,
+            ...tracksRef.current.map(
+                track => track.chords.length
             )
         );
 
 
-        for (let i = 0; i < repetitions; i++) {
+        // Nothing to play
+        if (maxLength === 0) {
 
-            if (!playingRef.current) break;
+            await sleep(50);
 
-            stopAllNotes();
+            continue;
+        }
 
-            await playStep(chordsAtStep);
-            if (!playingRef.current) break;
 
+        /*
+         * Get the current chord from every track.
+         */
+        const chordsAtStep = tracksRef.current
+            .filter(track =>
+                track.chords.length > 0 &&
+                !track.muted
+            )
+            .map(track => {
+
+                const state =
+                    playbackStateRef.current[track.id];
+
+                const chordIndex = state.step;
+
+                const chord =
+                    track.chords[chordIndex];
+
+                return {
+                    ...chord,
+
+                    volume: track.volume,
+
+                    trackId: track.id,
+
+                    state,
+
+                    /*
+                    * This is the ID used by SortableChord
+                    * for its active state.
+                    */
+                    uiId: `${track.id}-${chordIndex}`
+
+                };
+
+            });
+
+
+        /*
+         * Determine whether at least one track
+         * is starting a new chord.
+         */
+        const chordsToPlay = chordsAtStep.filter(chord => {
+
+            const pattern =
+                chord.pattern ||
+                createPattern(chord.beats);
+
+            return pattern[chord.state.beat] === true;
+
+        });
+
+        const shouldPlay = chordsToPlay.length > 0;
+
+        try {
+
+            if (shouldPlay) {
+
+                await playStep(chordsToPlay);
+
+            }
+
+
+            /*
+             * One beat.
+             */
             await sleep(
                 (60 / bpmRef.current) * 1000
             );
 
-            if (!playingRef.current) break;
+        }
+        catch (error) {
+
+            if (error.name === "AbortError") {
+                break;
+            }
+
+            console.error(
+                "Playback error:",
+                error
+            );
 
         }
 
+
+        /*
+         * Advance every track independently.
+         */
+        Object.values(
+            playbackStateRef.current
+        ).forEach(state => {
+
+            const track =
+                tracksRef.current.find(
+                    track =>
+                        track.id === state.trackId
+                );
+
+
+            if (
+                !track ||
+                track.chords.length === 0
+            ) {
+                return;
+            }
+
+
+            const chord =
+                track.chords[state.step];
+
+
+            state.beat++;
+
+
+            /*
+             * Move to the next chord when
+             * this chord has finished.
+             */
+            
+            if (state.beat >= chord.beats) {
+
+                state.beat = 0;
+
+                state.repeat++;
+
+                const repeatCount = Math.max(
+                    1,
+                    Number(chord.repeat) || 1
+                );
+
+
+                if (state.repeat >= repeatCount) {
+
+                    state.repeat = 0;
+
+                    state.step++;
+
+                    if (
+                        state.step >=
+                        track.chords.length
+                    ) {
+
+                        state.step = 0;
+
+                    }
+
+                }
+
+            }
+
+        });
+
+
+        /*
+         * Advance global beat.
+         */
+        currentBeatRef.current++;
+
+
+        if (
+            currentBeatRef.current >=
+            beatsPerBarRef.current
+        ) {
+
+            currentBeatRef.current = 0;
+
+        }
+
+
+        setTrackPlayheads(prev => {
+
+            const next = { ...prev };
+
+            Object.values(playbackStateRef.current).forEach(state => {
+
+                next[state.trackId] = state.step;
+
+            });
+
+            return next;
+
+        });
+
     }
-    else {
-
-        await sleep(50);
-        if (!playingRef.current) break;
-
-    }
-
-    }
-    catch(error){
-
-    if(error.name === "AbortError"){
-        break;
-    }
-
-    console.error(error);
-
-    }
 
 
+    /*
+     * Playback ended normally.
+     */
+    if (
+        playbackId ===
+        playbackIdRef.current
+    ) {
 
-    playheadRef.current++;
-    if(playheadRef.current >= maxLength){
-        playheadRef.current = 0;
-    }
-    
-    setPlayhead(playheadRef.current);
+        playingRef.current = false;
 
-    
+        setIsPlaying(false);
 
-
-  }
-
-
-  if (playbackId === playbackIdRef.current) {
-    setIsPlaying(false);
     }
 
 };
@@ -809,19 +1029,40 @@ const playAllTracks = async () => {
 
 const startPlayback = async () => {
 
+    /*
+     * Unlock Web Audio after the user's
+     * button click.
+     */
     await unlockAudio();
-    
-    // Give WebAudio time to wake up
-    await new Promise(resolve => setTimeout(resolve, 100));
 
+
+    /*
+     * Give the AudioContext a moment
+     * to become active.
+     */
+    await new Promise(resolve =>
+        setTimeout(resolve, 100)
+    );
+
+
+    /*
+     * If playback is already running,
+     * this means the user is resuming
+     * from pause.
+     */
     if (playingRef.current) {
 
         pausedRef.current = false;
-        setIsPlaying(true);
-        return;
 
+        setIsPlaying(true);
+
+        return;
     }
 
+
+    /*
+     * Start a completely new playback.
+     */
     playAllTracks();
 
 };
@@ -829,14 +1070,28 @@ const startPlayback = async () => {
 
 
 
+const pauseProgression = () => {
 
-  const pauseProgression = () => {
-
+    /*
+     * Tell the playback loop to pause.
+     */
     pausedRef.current = true;
+
+
+    /*
+     * Immediately stop currently
+     * sounding notes.
+     */
     stopAllNotes();
+
+
+    /*
+     * Change the UI from Pause
+     * back to Play.
+     */
     setIsPlaying(false);
 
-  };
+};
 
 
 const stopProgression = () => {
@@ -865,7 +1120,7 @@ const stopProgression = () => {
 
 
   // reset position
-  playheadRef.current = 0;
+  currentStepRef.current = 0;
   setPlayhead(0);
 
 
@@ -1147,7 +1402,13 @@ const stopProgression = () => {
             <div
                 style={{
                     position:"absolute",
-                    left:`${(playhead % Math.max(track.chords.length, 1)) * 80 + (isPlaying ? 70 : 0)}px`,
+                    left:`${
+                        (
+                            (trackPlayheads[track.id] ?? 0) %
+                            Math.max(track.chords.length, 1)
+                        ) * 80
+                        + (isPlaying ? 70 : 0)
+                    }px`,
                     top:-5,
                     height:80,
                     width:3,
@@ -1227,9 +1488,18 @@ const stopProgression = () => {
 
                     octave:String(chord.octave),
 
+                    inversion:String(chord.inversion),
+
                     beats:String(chord.beats),
 
-                    wait:String(chord.wait)
+                    repeat: String(chord.repeat ?? 1),
+
+                    wait:String(chord.wait),
+
+                    pattern: createPattern(
+                        chord.beats,
+                        chord.pattern
+                    )
 
                 });
 
@@ -1256,9 +1526,12 @@ const stopProgression = () => {
         setNewChord({
             name: "",
             octave: "4",
+            inversion: "0",
             beats: "1",
+            repeat: "1",
             instrument: "acoustic_grand_piano",
-            wait: "0"
+            wait: "0",
+            pattern: [true]
         });
 
         setOpen(true);
@@ -1428,29 +1701,178 @@ const stopProgression = () => {
                 <Grid size={6}>
                     <TextField
                         fullWidth
-                        label="Beats"
+                        label="Inversion"
                         type="number"
-                        value={editChord.beats}
+                        value={editChord.inversion}
                         inputProps={{
-                            min:1,
-                            max:4,
+                            min:0,
+                            max:2,
                             inputMode:"numeric"
                         }}
                         onChange={(e)=>
                             setEditChord({
                                 ...editChord,
-                                beats:e.target.value
+                                inversion:e.target.value
+                            })
+                        }
+                        onBlur={()=>
+                            setEditChord({
+                                ...editChord,
+                                inversion:String(
+                                    Math.min(
+                                        2,
+                                        Math.max(
+                                            0,
+                                            Number(editChord.inversion) || 1
+                                        )
+                                    )
+                                )
+                            })
+                        }
+                    />
+                </Grid>
+
+
+                <Grid size={6}>
+
+                    <TextField
+                        type="number"
+                        fullWidth
+                        label="Beats"
+                        inputProps={{
+                            min: 1,
+                            max: 16,
+                            step: 1
+                        }}
+                        value={editChord.beats}
+
+                        onChange={(e) => {
+
+                            const beats = e.target.value;
+
+                            setEditChord(prev => ({
+                                ...prev,
+                                beats,
+                                pattern: createPattern(
+                                    beats,
+                                    prev.pattern
+                                )
+                            }));
+
+                        }}
+
+                        onBlur={() => {
+
+                            const beats = Math.min(
+                                16,
+                                Math.max(
+                                    1,
+                                    Number(editChord.beats) || 1
+                                )
+                            );
+
+                            setEditChord(prev => ({
+                                ...prev,
+                                beats: String(beats),
+                                pattern: createPattern(
+                                    beats,
+                                    prev.pattern
+                                )
+                            }));
+
+                        }}
+                    />
+
+                    {/* Beat Pattern */}
+
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 10,
+                            marginTop: 12,
+                            minHeight: 20
+                        }}
+                    >
+
+                        {editChord.pattern.map((active, index) => (
+
+                            <div
+                                key={index}
+
+                                onClick={() => {
+
+                                    setEditChord(prev => ({
+                                        ...prev,
+
+                                        pattern: prev.pattern.map(
+                                            (value, i) =>
+                                                i === index
+                                                    ? !value
+                                                    : value
+                                        )
+                                    }));
+
+                                }}
+
+                                style={{
+                                    width: 14,
+                                    height: 14,
+                                    borderRadius: "50%",
+                                    backgroundColor:
+                                        active
+                                            ? colors.primary
+                                            : "white",
+
+                                    border: `2px solid ${
+                                        active
+                                            ? colors.primary
+                                            : colors.border
+                                    }`,
+
+                                    cursor: "pointer",
+
+                                    boxSizing: "border-box",
+
+                                    transition:
+                                        "all 0.15s ease"
+                                }}
+                            />
+
+                        ))}
+
+                    </div>
+
+                </Grid>
+
+                <Grid size={6}>
+                    <TextField
+                        fullWidth
+                        label="Repeat"
+                        type="number"
+                        value={editChord.repeat}
+                        inputProps={{
+                            min: 1,
+                            max: 16,
+                            step: 1,
+                            inputMode: "numeric"
+                        }}
+                        onChange={(e) =>
+                            setEditChord({
+                                ...editChord,
+                                repeat: e.target.value
                             })
                         }
                         onBlur={() =>
                             setEditChord({
                                 ...editChord,
-                                beats:String(
+                                repeat: String(
                                     Math.min(
-                                        4,
+                                        16,
                                         Math.max(
                                             1,
-                                            Number(editChord.beats) || 1
+                                            Number(editChord.repeat) || 1
                                         )
                                     )
                                 )
@@ -1599,32 +2021,181 @@ const stopProgression = () => {
                 />
             </Grid>
 
+
             <Grid size={6}>
+                <TextField
+                    type="number"
+                    fullWidth
+                    label="Inversion"
+                    inputProps={{
+                        min:0,
+                        max:2,
+                        step:1
+                    }}
+                    value={newChord.inversion}
+                    onChange={(e)=>
+                        setNewChord({
+                            ...newChord,
+                            inversion:e.target.value
+                        })
+                    }
+                    onBlur={() =>
+                        setNewChord({
+                            ...newChord,
+                            inversion:String(
+                                Math.min(
+                                    2,
+                                    Math.max(
+                                        0,
+                                        Number(newChord.inversion) || 1
+                                    )
+                                )
+                            )
+                        })
+                    }
+                />
+            </Grid>
+
+
+            <Grid size={6}>
+
                 <TextField
                     type="number"
                     fullWidth
                     label="Beats"
                     inputProps={{
                         min: 1,
-                        max: 4,
+                        max: 16,
                         step: 1
                     }}
                     value={newChord.beats}
-                    onChange={(e)=>
+
+                    onChange={(e) => {
+
+                        const beats = e.target.value;
+
+                        setNewChord(prev => ({
+                            ...prev,
+                            beats,
+                            pattern: createPattern(
+                                beats,
+                                prev.pattern
+                            )
+                        }));
+
+                    }}
+
+                    onBlur={() => {
+
+                        const beats = Math.min(
+                            16,
+                            Math.max(
+                                1,
+                                Number(newChord.beats) || 1
+                            )
+                        );
+
+                        setNewChord(prev => ({
+                            ...prev,
+                            beats: String(beats),
+                            pattern: createPattern(
+                                beats,
+                                prev.pattern
+                            )
+                        }));
+
+                    }}
+                />
+
+                {/* Beat Pattern */}
+
+                <div
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 10,
+                        marginTop: 12,
+                        minHeight: 20
+                    }}
+                >
+
+                    {newChord.pattern.map((active, index) => (
+
+                        <div
+                            key={index}
+
+                            onClick={() => {
+
+                                setNewChord(prev => ({
+                                    ...prev,
+
+                                    pattern: prev.pattern.map(
+                                        (value, i) =>
+                                            i === index
+                                                ? !value
+                                                : value
+                                    )
+                                }));
+
+                            }}
+
+                            style={{
+                                width: 14,
+                                height: 14,
+                                borderRadius: "50%",
+                                backgroundColor:
+                                    active
+                                        ? colors.primary
+                                        : "white",
+
+                                border: `2px solid ${
+                                    active
+                                        ? colors.primary
+                                        : colors.border
+                                }`,
+
+                                cursor: "pointer",
+
+                                boxSizing: "border-box",
+
+                                transition:
+                                    "all 0.15s ease"
+                            }}
+                        />
+
+                    ))}
+
+                </div>
+
+            </Grid>
+
+            <Grid size={6}>
+                <TextField
+                    type="number"
+                    fullWidth
+                    label="Repeat"
+                    inputProps={{
+                        min: 1,
+                        max: 16,
+                        step: 1
+                    }}
+                    value={newChord.repeat}
+                    onChange={(e) =>
                         setNewChord({
                             ...newChord,
-                            beats:e.target.value
+                            repeat: e.target.value
                         })
                     }
                     onBlur={() =>
                         setNewChord({
                             ...newChord,
-                            beats:String(
+                            repeat: String(
                                 Math.min(
-                                    4,
+                                    16,
                                     Math.max(
                                         1,
-                                        Number(newChord.beats) || 1
+                                        Number(newChord.repeat) || 1
                                     )
                                 )
                             )
@@ -1698,9 +2269,12 @@ const stopProgression = () => {
                 setNewChord({
                     name:"",
                     octave:"4",
+                    inversion: "0",
                     beats:"1",
+                    repeat: "1",
                     instrument:"acoustic_grand_piano",
-                    wait:"0"
+                    wait:"0",
+                    pattern: [true]
                 });
             }}
         >
