@@ -17,3 +17,12 @@ export function chordToMidi(chordName, octave, inversion = 0) {
 
     return midi;
 }
+
+
+export function noteToMidi(noteName, octave) {
+    if (!noteName) return [];
+
+    const midi = Note.midi(`${noteName}${octave}`);
+
+    return midi === null ? [] : [midi];
+}

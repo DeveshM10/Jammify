@@ -11,7 +11,9 @@ import {
   MenuItem,
   Grid,
   Slider,
-  Menu
+  Menu,
+  Tabs,
+  Tab
 } from "@mui/material";
 
 import IconButton from "@mui/material/IconButton";
@@ -45,7 +47,8 @@ import {
 }
 
 import {
-    chordToMidi
+    chordToMidi,
+    noteToMidi
 } from "./chords_inversion";
 
 
@@ -185,16 +188,21 @@ function SortableChord({
 
             <div
                 style={{
-                    fontSize:18,
-                    fontWeight:700,
-                    color:active
-                        ? "white"
-                        : colors.text
+                    fontSize: 18,
+                    fontWeight: 700,
+                    color: active ? "white" : colors.text
                 }}
             >
-
                 {chord.name}
+            </div>
 
+            <div
+                style={{
+                    fontSize: 10,
+                    opacity: 0.65
+                }}
+            >
+                {chord.type === "note" ? "NOTE" : "CHORD"}
             </div>
 
 
@@ -262,9 +270,12 @@ function App() {
   const [editingTrack, setEditingTrack] = useState(null);
   const [chordInput, setChordInput] = useState("");
   
+  const [addTab, setAddTab] = useState(0);
+
   const [selectedChord, setSelectedChord] = useState(null);
   const currentChordBeatsRef = useRef(1);
   const [editChord, setEditChord] = useState({
+    type: "chord",
     name: "",
     octave: "4",
     inversion: "0",
@@ -328,6 +339,7 @@ const handleDragEnd = (trackId, event)=>{
     
 
   const [newChord, setNewChord] = useState({
+  type: "chord",
   name: "",
   octave: "4",
   inversion: "0",
@@ -508,42 +520,55 @@ const toggleMuteTrack = (id) => {
 
 const addChordToTrack = () => {
 
-  if (!newChord.name.trim()) return;
+    if (!newChord.name.trim()) return;
 
-  setTracks(
-    tracks.map(track =>
-      track.id === editingTrack
-        ? {
-            ...track,
-            chords: [
-              ...track.chords,
-              {
-                ...newChord,
+    setTracks(prev =>
+        prev.map(track =>
+            track.id === editingTrack
+                ? {
+                    ...track,
+                    chords: [
+                        ...track.chords,
+                        {
+                            ...newChord,
 
-                // convert back to numbers
-                octave: Number(newChord.octave),
-                inversion: Number(newChord.inversion),
-                beats: Number(newChord.beats),
-                repeat: Number(newChord.repeat),
-                wait: Number(newChord.wait)
-              }
-            ]
-          }
-        : track
-    )
-  );
+                            type:
+                                addTab === 0
+                                    ? "chord"
+                                    : "note",
 
+                            octave: Number(newChord.octave),
 
-  setNewChord({
-    name: "",
-    octave: "4",
-    inversion: "0",
-    beats: "1",
-    repeat: "1",
-    instrument: "acoustic_grand_piano",
-    wait: "0",
-    pattern: [true]
-  });
+                            inversion:
+                                addTab === 0
+                                    ? Number(newChord.inversion)
+                                    : 0,
+
+                            beats: Number(newChord.beats),
+
+                            repeat: Number(newChord.repeat),
+
+                            wait: Number(newChord.wait)
+                        }
+                    ]
+                }
+                : track
+        )
+    );
+
+    setNewChord({
+        type: "chord",
+        name: "",
+        octave: "4",
+        inversion: "0",
+        beats: "1",
+        repeat: "1",
+        instrument: "acoustic_grand_piano",
+        wait: "0",
+        pattern: [true]
+    });
+
+    setAddTab(0);
 };
 
 
@@ -656,6 +681,25 @@ const saveTempo = async () => {
 };
 
 
+const itemToMidi = (item) => {
+
+    if (item.type === "note") {
+
+        return noteToMidi(
+            item.name,
+            item.octave,
+        );
+
+    }
+
+    return chordToMidi(
+        item.name,
+        item.octave,
+        item.inversion
+    );
+
+};
+
 const playStep = async (chords) => {
 
     setActiveChords(
@@ -665,12 +709,7 @@ const playStep = async (chords) => {
     await Promise.all(
         chords.map(async chord => {
 
-            const midiNotes =
-                chordToMidi(
-                    chord.name,
-                    chord.octave,
-                    chord.inversion
-                );
+            const midiNotes = itemToMidi(chord);
 
             const pattern =
                 chord.pattern ||
@@ -1524,6 +1563,7 @@ const stopProgression = () => {
         e.stopPropagation();
         setEditingTrack(track.id);
         setNewChord({
+            type: "chord",
             name: "",
             octave: "4",
             inversion: "0",
@@ -1582,6 +1622,8 @@ const stopProgression = () => {
         onClose={() => setTempoDialogOpen(false)}
     >
         <DialogTitle>Tempo Settings</DialogTitle>
+
+
 
         <DialogContent
             sx={{
@@ -1644,7 +1686,9 @@ const stopProgression = () => {
         fullWidth
     >
 
-        <DialogTitle>Edit Chord</DialogTitle>
+        <DialogTitle>
+            Edit {editChord.type === "note" ? "Note" : "Chord"}
+        </DialogTitle>
 
         <DialogContent>
 
@@ -1698,6 +1742,7 @@ const stopProgression = () => {
                     />
                 </Grid>
 
+                {editChord.type === "chord" && (
                 <Grid size={6}>
                     <TextField
                         fullWidth
@@ -1723,7 +1768,7 @@ const stopProgression = () => {
                                         2,
                                         Math.max(
                                             0,
-                                            Number(editChord.inversion) || 1
+                                            Number(editChord.inversion) || 0
                                         )
                                     )
                                 )
@@ -1731,6 +1776,7 @@ const stopProgression = () => {
                         }
                     />
                 </Grid>
+                )}
 
 
                 <Grid size={6}>
@@ -1966,7 +2012,28 @@ const stopProgression = () => {
     maxWidth="sm"
     fullWidth
 >
-    <DialogTitle>Add Chord</DialogTitle>
+    <DialogTitle>
+        {addTab === 0 ? "Add Chord" : "Add Note"}
+    </DialogTitle>
+
+        <Tabs
+            value={addTab}
+            onChange={(e, value) => {
+                setAddTab(value);
+
+                setNewChord(prev => ({
+                    ...prev,
+                    type: value === 0 ? "chord" : "note",
+                    inversion: value === 0
+                        ? prev.inversion
+                        : "0"
+                }));
+            }}
+            centered
+        >
+            <Tab label="Add Chord" />
+            <Tab label="Add Note" />
+        </Tabs>
 
     <DialogContent>
 
@@ -1975,15 +2042,19 @@ const stopProgression = () => {
             <Grid size={12}>
                 <TextField
                     fullWidth
-                    label="Chord Name"
+                    label={addTab === 0 ? "Chord Name" : "Note"}
                     value={newChord.name}
-                    onChange={(e)=>
+                    onChange={(e) =>
                         setNewChord({
                             ...newChord,
-                            name:e.target.value
+                            name: e.target.value
                         })
                     }
-                    placeholder="Cm7, F#, Bbmaj7..."
+                    placeholder={
+                        addTab === 0
+                            ? "Cm7, F#, Bbmaj7..."
+                            : "C, C#, D, Eb..."
+                    }
                 />
             </Grid>
 
@@ -2047,7 +2118,7 @@ const stopProgression = () => {
                                     2,
                                     Math.max(
                                         0,
-                                        Number(newChord.inversion) || 1
+                                        Number(newChord.inversion) || 0
                                     )
                                 )
                             )
@@ -2288,7 +2359,7 @@ const stopProgression = () => {
                 setOpen(false);
             }}
         >
-            Add Chord
+            {addTab === 0 ? "Add Chord" : "Add Note"}
         </Button>
 
     </DialogActions>
