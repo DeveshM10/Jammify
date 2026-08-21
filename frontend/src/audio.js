@@ -225,6 +225,7 @@ export function updateTrackVolume(
  *
  * This fixes multi-beat sustain.
  */
+
 export async function playChord(
     notes,
     durationBeats,
@@ -235,6 +236,9 @@ export async function playChord(
     speed = 1
 ) {
 
+    /*
+     * Nothing to play.
+     */
     if (
         !notes ||
         notes.length === 0
@@ -242,20 +246,30 @@ export async function playChord(
         return;
     }
 
+
+    /*
+     * Load the sampler for this track.
+     */
     const sampler =
         await loadInstrumentForTrack(
             trackId,
             instrument
         );
 
+
+    /*
+     * Get this track's gain.
+     */
     const gain =
         getTrackGain(
             trackId,
             volume
         );
 
+
     /*
-     * Connect sampler to track gain.
+     * Connect sampler to this track's
+     * gain node.
      */
     if (
         sampler.output &&
@@ -267,8 +281,10 @@ export async function playChord(
         sampler.__connectedToTrack = true;
     }
 
+
     /*
-     * Update volume.
+     * Make sure volume follows the
+     * current track volume.
      */
     gain.gain.rampTo(
         Number(volume),
@@ -277,162 +293,207 @@ export async function playChord(
 
 
     /*
-     * Clamp speed between 0 and 1.
+     * Calculate exact chord duration.
+     *
+     * Example:
+     *
+     * BPM 120
+     *
+     * 1 beat = 0.5 sec
+     * 2 beats = 1 sec
+     * 4 beats = 2 sec
      */
-    speed = Math.max(
-        0,
-        Math.min(
-            1,
-            Number(speed) || 0
-        )
-    );
-
-
-    /*
-     * Duration of one beat.
-     */
-    const beatDuration =
-        60 / Number(bpm);
-
-
-    /*
-     * Total duration of this chord.
-     */
-    const totalDuration =
-        beatDuration *
+    const duration =
+        (
+            60 /
+            Number(bpm)
+        ) *
         Number(durationBeats);
 
 
+    /*
+     * Convert MIDI numbers to Tone
+     * note names.
+     */
     const noteNames =
-        notes.map(midiToNote);
+        notes.map(
+            midiToNote
+        );
 
 
     /*
+     * Clamp speed between 0 and 1.
+     */
+    const normalizedSpeed =
+        Math.min(
+            1,
+            Math.max(
+                0,
+                Number(speed ?? 1)
+            )
+        );
+
+
+    /*
+     * ------------------------------------------------
      * SPEED 0
+     * ------------------------------------------------
      *
      * Only play the bass note.
+     *
+     * notes[0] is assumed to be the
+     * lowest/bass note of the chord.
      */
-    if (speed === 0) {
+    if (normalizedSpeed === 0) {
 
         sampler.triggerAttackRelease(
             noteNames[0],
-            totalDuration
+            duration
         );
 
-        activeVoices.push({
-            trackId,
-            sampler
-        });
-
-        return;
     }
 
 
     /*
+     * ------------------------------------------------
      * SPEED 1
+     * ------------------------------------------------
      *
-     * Play the entire chord simultaneously.
+     * Maximum speed.
+     *
+     * Play every note simultaneously.
      */
-    if (speed >= 1) {
+    else if (normalizedSpeed >= 1) {
 
         sampler.triggerAttackRelease(
             noteNames,
-            totalDuration
+            duration
         );
 
-        activeVoices.push({
-            trackId,
-            sampler
-        });
-
-        return;
     }
 
 
     /*
-     * Determine notes-per-beat.
+     * ------------------------------------------------
+     * BETWEEN 0 AND 1
+     * ------------------------------------------------
      *
-     * 0.25 -> 0.5 notes/beat
-     * 0.5  -> 2 notes/beat
-     * 0.75 -> 3 notes/beat
+     * Arpeggio.
      */
-    let notesPerBeat;
-
-    if (speed < 0.5) {
-
-        notesPerBeat =
-            speed * 2;
-
-    }
     else {
 
-        notesPerBeat =
-            speed * 4;
-
-    }
-
-
-    /*
-     * Time between arpeggio notes.
-     */
-    const interval =
-        beatDuration /
-        notesPerBeat;
-
-
-    /*
-     * Schedule the arpeggio.
-     *
-     * Notes cycle through the chord:
-     *
-     * C E G C E G...
-     */
-    let noteIndex = 0;
-
-    let elapsed = 0;
-
-    while (
-        elapsed < totalDuration
-    ) {
-
-        const note =
-            noteNames[
-                noteIndex %
-                noteNames.length
-            ];
-
-
         /*
-         * How long this individual
-         * note should sustain.
+         * Convert speed to notes per beat.
          *
-         * It ends when the next
-         * arpeggio note starts.
+         * 0.25 -> 1 note / beat
+         * 0.50 -> 2 notes / beat
+         * 0.75 -> 3 notes / beat
          */
-        const noteDuration =
-            Math.min(
-                interval,
-                totalDuration - elapsed
+        const notesPerBeat =
+            Math.max(
+                1,
+                Math.round(
+                    normalizedSpeed * 4
+                )
             );
 
 
-        sampler.triggerAttackRelease(
-            note,
-            noteDuration,
-            Tone.now() + elapsed
+        /*
+         * Length of one beat in seconds.
+         */
+        const beatDuration =
+            60 /
+            Number(bpm);
+
+
+        /*
+         * Time between arpeggio notes.
+         */
+        const noteInterval =
+            beatDuration /
+            notesPerBeat;
+
+
+        /*
+         * Use one shared Tone timestamp.
+         *
+         * This is important because it makes
+         * all notes schedule accurately relative
+         * to the same audio clock.
+         */
+        const startTime =
+            Tone.now();
+
+
+        /*
+         * Play notes one after another.
+         */
+        noteNames.forEach(
+            (note, index) => {
+
+                /*
+                 * Calculate when this note
+                 * should begin.
+                 */
+                const offset =
+                    index *
+                    noteInterval;
+
+
+                /*
+                 * Never start a note after
+                 * the chord has finished.
+                 */
+                if (
+                    offset >= duration
+                ) {
+                    return;
+                }
+
+
+                /*
+                 * The note should sustain
+                 * until the chord ends.
+                 *
+                 * Example:
+                 *
+                 * chord duration = 2 sec
+                 *
+                 * note 1 starts at 0 sec
+                 * duration = 2 sec
+                 *
+                 * note 2 starts at 0.5 sec
+                 * duration = 1.5 sec
+                 *
+                 * note 3 starts at 1 sec
+                 * duration = 1 sec
+                 */
+                const noteDuration =
+                    duration -
+                    offset;
+
+
+                sampler.triggerAttackRelease(
+                    note,
+                    noteDuration,
+                    startTime + offset
+                );
+
+            }
         );
 
-
-        noteIndex++;
-
-        elapsed += interval;
     }
 
 
+    /*
+     * Keep track of this sampler
+     * for emergency stopping.
+     */
     activeVoices.push({
         trackId,
         sampler
     });
+
 }
 
 

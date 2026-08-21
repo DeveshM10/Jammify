@@ -635,7 +635,8 @@ const editChordData = () => {
                                 inversion: Number(editChord.inversion),
                                 beats: Number(editChord.beats),
                                 repeat: Number(editChord.repeat),
-                                wait: Number(editChord.wait)
+                                wait: Number(editChord.wait),
+                                speed: Number(editChord.speed)
                             }
                             : chord
                     )
@@ -1939,7 +1940,7 @@ const stopProgression = () => {
                             max={1}
                             step={0.05}
                             onChange={(e, value) =>
-                                setNewChord(prev => ({
+                                setEditChord(prev => ({
                                     ...prev,
                                     speed: value
                                 }))
@@ -2480,6 +2481,7 @@ const stopProgression = () => {
                     repeat: "1",
                     instrument:"acoustic_grand_piano",
                     wait:"0",
+                    speed: "1",
                     pattern: [true]
                 });
             }}
