@@ -97,7 +97,7 @@ function SortableChord({
 
     const activeColor =
     chord.type === "note"
-        ? "#FF3B30"
+        ? "#FF6B8A"
         : colors.primary;
 
     const style = {
@@ -133,8 +133,10 @@ function SortableChord({
         position:"relative",
 
         boxShadow: active
-            ? "0 0 18px rgba(109,74,255,0.7)"
-            : "0 2px 8px rgba(0,0,0,0.05)",
+            ? chord.type === "note"
+            ? "0 0 18px rgba(255,59,48,0.7)"
+            : "0 0 18px rgba(109,74,255,0.7)"
+        : "0 2px 8px rgba(0,0,0,0.05)",
 
         transition:"all 0.15s ease",
 
