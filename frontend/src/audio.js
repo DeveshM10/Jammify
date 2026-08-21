@@ -231,7 +231,8 @@ export async function playChord(
     bpm,
     volume = 0.8,
     instrument = "acoustic_grand_piano",
-    trackId
+    trackId,
+    speed = 1
 ) {
 
     if (
@@ -241,13 +242,11 @@ export async function playChord(
         return;
     }
 
-
     const sampler =
         await loadInstrumentForTrack(
             trackId,
             instrument
         );
-
 
     const gain =
         getTrackGain(
@@ -255,10 +254,8 @@ export async function playChord(
             volume
         );
 
-
     /*
-     * Connect this track's sampler
-     * to this track's gain.
+     * Connect sampler to track gain.
      */
     if (
         sampler.output &&
@@ -267,14 +264,11 @@ export async function playChord(
 
         sampler.connect(gain);
 
-        sampler.__connectedToTrack =
-            true;
+        sampler.__connectedToTrack = true;
     }
 
-
     /*
-     * Make sure volume follows
-     * the current track volume.
+     * Update volume.
      */
     gain.gain.rampTo(
         Number(volume),
@@ -283,45 +277,158 @@ export async function playChord(
 
 
     /*
-     * Calculate EXACT chord duration.
-     *
-     * Example:
-     *
-     * BPM = 120
-     * 1 beat = 0.5 sec
-     * 2 beats = 1 sec
-     * 4 beats = 2 sec
+     * Clamp speed between 0 and 1.
      */
-    const duration =
-        (
-            60 /
-            Number(bpm)
-        ) *
-        Number(durationBeats);
-
-
-    const noteNames =
-        notes.map(
-            midiToNote
-        );
-
-
-    /*
-     * Play the whole chord together.
-     *
-     * Tone will release it after
-     * `duration`.
-     */
-    sampler.triggerAttackRelease(
-        noteNames,
-        duration
+    speed = Math.max(
+        0,
+        Math.min(
+            1,
+            Number(speed) || 0
+        )
     );
 
 
     /*
-     * Keep track of the voice only
-     * for emergency stopping.
+     * Duration of one beat.
      */
+    const beatDuration =
+        60 / Number(bpm);
+
+
+    /*
+     * Total duration of this chord.
+     */
+    const totalDuration =
+        beatDuration *
+        Number(durationBeats);
+
+
+    const noteNames =
+        notes.map(midiToNote);
+
+
+    /*
+     * SPEED 0
+     *
+     * Only play the bass note.
+     */
+    if (speed === 0) {
+
+        sampler.triggerAttackRelease(
+            noteNames[0],
+            totalDuration
+        );
+
+        activeVoices.push({
+            trackId,
+            sampler
+        });
+
+        return;
+    }
+
+
+    /*
+     * SPEED 1
+     *
+     * Play the entire chord simultaneously.
+     */
+    if (speed >= 1) {
+
+        sampler.triggerAttackRelease(
+            noteNames,
+            totalDuration
+        );
+
+        activeVoices.push({
+            trackId,
+            sampler
+        });
+
+        return;
+    }
+
+
+    /*
+     * Determine notes-per-beat.
+     *
+     * 0.25 -> 0.5 notes/beat
+     * 0.5  -> 2 notes/beat
+     * 0.75 -> 3 notes/beat
+     */
+    let notesPerBeat;
+
+    if (speed < 0.5) {
+
+        notesPerBeat =
+            speed * 2;
+
+    }
+    else {
+
+        notesPerBeat =
+            speed * 4;
+
+    }
+
+
+    /*
+     * Time between arpeggio notes.
+     */
+    const interval =
+        beatDuration /
+        notesPerBeat;
+
+
+    /*
+     * Schedule the arpeggio.
+     *
+     * Notes cycle through the chord:
+     *
+     * C E G C E G...
+     */
+    let noteIndex = 0;
+
+    let elapsed = 0;
+
+    while (
+        elapsed < totalDuration
+    ) {
+
+        const note =
+            noteNames[
+                noteIndex %
+                noteNames.length
+            ];
+
+
+        /*
+         * How long this individual
+         * note should sustain.
+         *
+         * It ends when the next
+         * arpeggio note starts.
+         */
+        const noteDuration =
+            Math.min(
+                interval,
+                totalDuration - elapsed
+            );
+
+
+        sampler.triggerAttackRelease(
+            note,
+            noteDuration,
+            Tone.now() + elapsed
+        );
+
+
+        noteIndex++;
+
+        elapsed += interval;
+    }
+
+
     activeVoices.push({
         trackId,
         sampler

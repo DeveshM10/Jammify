@@ -289,6 +289,7 @@ function App() {
     repeat: "1",
     instrument: "acoustic_grand_piano",
     wait: "0",
+    speed: "1",
     pattern: [true]
     });
 
@@ -353,6 +354,7 @@ const handleDragEnd = (trackId, event)=>{
   repeat: "1",
   instrument: "acoustic_grand_piano",
   wait: "0",
+  speed: "1",
   pattern: [true]
     });
 
@@ -554,7 +556,9 @@ const addChordToTrack = () => {
 
                             repeat: Number(newChord.repeat),
 
-                            wait: Number(newChord.wait)
+                            wait: Number(newChord.wait),
+
+                            speed: Number(newChord.speed)
                         }
                     ]
                 }
@@ -571,6 +575,7 @@ const addChordToTrack = () => {
         repeat: "1",
         instrument: "acoustic_grand_piano",
         wait: "0",
+        speed: "1",
         pattern: [true]
     });
 
@@ -649,6 +654,7 @@ const editChordData = () => {
         repeat: "1",
         instrument: "acoustic_grand_piano",
         wait: "0",
+        speed: "1",
         pattern: [true]
     });
 };
@@ -753,7 +759,8 @@ const playStep = async (chords) => {
                 bpmRef.current,
                 chord.volume,
                 chord.instrument,
-                chord.trackId
+                chord.trackId,
+                Number(chord.speed ?? 1)
             );
 
         })
@@ -1577,6 +1584,7 @@ const stopProgression = () => {
             repeat: "1",
             instrument: "acoustic_grand_piano",
             wait: "0",
+            speed: "1",
             pattern: [true]
         });
 
@@ -1893,6 +1901,126 @@ const stopProgression = () => {
                             />
 
                         ))}
+
+                    </div>
+
+                </Grid>
+
+                <Grid size={12}>
+
+                    <div
+                        style={{
+                            marginTop: 10,
+                            padding: "0 10px"
+                        }}
+                    >
+
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                color: colors.text,
+                                fontWeight: 600,
+                                marginBottom: 4
+                            }}
+                        >
+                            <span>Speed</span>
+
+                            <span>
+                                {Number(newChord.speed).toFixed(2)}
+                            </span>
+                        </div>
+
+                        <Slider
+                            value={Number(newChord.speed)}
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            onChange={(e, value) =>
+                                setNewChord(prev => ({
+                                    ...prev,
+                                    speed: value
+                                }))
+                            }
+                            sx={{
+                                color: colors.primary
+                            }}
+                        />
+
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                fontSize: 11,
+                                opacity: 0.6,
+                                color: colors.text
+                            }}
+                        >
+                            <span>Bass</span>
+                            <span>Arpeggio</span>
+                            <span>Full</span>
+                        </div>
+
+                    </div>
+
+                </Grid>
+
+                <Grid size={12}>
+
+                    <div
+                        style={{
+                            marginTop: 10,
+                            padding: "0 10px"
+                        }}
+                    >
+
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                color: colors.text,
+                                fontWeight: 600,
+                                marginBottom: 4
+                            }}
+                        >
+                            <span>Speed</span>
+
+                            <span>
+                                {Number(editChord.speed).toFixed(2)}
+                            </span>
+                        </div>
+
+                        <Slider
+                            value={Number(editChord.speed)}
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            onChange={(e, value) =>
+                                setNewChord(prev => ({
+                                    ...prev,
+                                    speed: value
+                                }))
+                            }
+                            sx={{
+                                color: colors.primary
+                            }}
+                        />
+
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                fontSize: 11,
+                                opacity: 0.6,
+                                color: colors.text
+                            }}
+                        >
+                            <span>Bass</span>
+                            <span>Arpeggio</span>
+                            <span>Full</span>
+                        </div>
 
                     </div>
 
