@@ -1729,7 +1729,7 @@ const stopProgression = () => {
                         value={editChord.octave}
                         inputProps={{
                             min:1,
-                            max:4,
+                            max:8,
                             inputMode:"numeric"
                         }}
                         onChange={(e)=>
@@ -1743,7 +1743,7 @@ const stopProgression = () => {
                                 ...editChord,
                                 octave:String(
                                     Math.min(
-                                        4,
+                                        8,
                                         Math.max(
                                             1,
                                             Number(editChord.octave) || 1
@@ -2139,7 +2139,7 @@ const stopProgression = () => {
                     label="Octave"
                     inputProps={{
                         min:1,
-                        max:4,
+                        max:8,
                         step:1
                     }}
                     value={newChord.octave}
@@ -2154,7 +2154,7 @@ const stopProgression = () => {
                             ...newChord,
                             octave:String(
                                 Math.min(
-                                    4,
+                                    8,
                                     Math.max(
                                         1,
                                         Number(newChord.octave) || 1
