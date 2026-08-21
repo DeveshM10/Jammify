@@ -95,6 +95,10 @@ function SortableChord({
         `${track.id}-${index}`
     );
 
+    const activeColor =
+    chord.type === "note"
+        ? "#FF3B30"
+        : colors.primary;
 
     const style = {
 
@@ -106,12 +110,12 @@ function SortableChord({
         height:70,
 
         background: active
-            ? colors.primary
+            ? activeColor
             : colors.card,
 
         border:`2px solid ${
             active
-                ? colors.primary
+                ? activeColor
                 : colors.border
         }`,
 
