@@ -97,8 +97,6 @@ function SortableChord({
 
         transform: CSS.Transform.toString(transform),
 
-        transition,
-
         width:70,
         height:70,
 
