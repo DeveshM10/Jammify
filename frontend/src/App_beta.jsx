@@ -69,7 +69,6 @@ const instruments = [
     "rock_guitar"
 ];
 
-const test = 
 
 
 function SortableChord({
