@@ -450,6 +450,7 @@ const addTrack = () => {
         chords: [],
         muted: false,
         volume: 0.8,
+        loop: true,
         color: trackColors[
             tracksRef.current.length % trackColors.length
         ]
@@ -568,6 +569,24 @@ const toggleMuteTrack = (id) => {
   );
 
 };
+
+const toggleTrackLoop = (id) => {
+
+    setTracks(prevTracks =>
+        prevTracks.map(track =>
+            track.id === id
+                ? {
+                    ...track,
+                    loop: track.loop === false
+                        ? true
+                        : false
+                }
+                : track
+        )
+    );
+
+};
+
 
 
 const addChordToTrack = () => {
@@ -960,7 +979,8 @@ const playAllTracks = async () => {
             trackId: track.id,
             step: 0,
             beat: 0,
-            repeat: 0
+            repeat: 0,
+            finished: false
         };
 
     });
@@ -1025,7 +1045,8 @@ const playAllTracks = async () => {
                     trackId: track.id,
                     step: 0,
                     beat: 0,
-                    repeat: 0
+                    repeat: 0,
+                    finished: false
                 };
 
             }
@@ -1051,8 +1072,10 @@ const playAllTracks = async () => {
         const chordsAtStep = tracksRef.current
             .filter(track =>
                 track.chords.length > 0 &&
-                !track.muted
+                !track.muted &&
+                !playbackStateRef.current[track.id]?.finished
             )
+
             .map(track => {
 
                 const state =
@@ -1199,14 +1222,25 @@ const playAllTracks = async () => {
 
                     state.step++;
 
-                    if (
-                        state.step >=
-                        track.chords.length
-                    ) {
+                    if (state.step >= track.chords.length) {
 
-                        state.step = 0;
+                        if (track.loop === false) {
+
+                            // Track is finished.
+                            state.finished = true;
+
+                            // Keep it at the last position.
+                            state.step = track.chords.length - 1;
+
+                        } else {
+
+                            // Normal track: loop back to beginning.
+                            state.step = 0;
+
+                        }
 
                     }
+
 
                 }
 
@@ -1624,35 +1658,63 @@ const stopProgression = () => {
         />
 
 
-        <div
-            style={{
-            display:"flex",
-            gap:5
-            }}
-            >
+    <div
+        style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 6
+        }}
+    >
 
-
-
-           <Button
+        {/* Mute */}
+        <Button
             size="small"
             variant="contained"
             sx={{
-            backgroundColor:
-            track.muted
-            ? "#999"
-            : colors.primary,
-            minWidth:50
+                backgroundColor:
+                    track.muted
+                        ? "#999"
+                        : colors.primary,
+                minWidth: 50
             }}
-            onClick={(e)=>{
-            e.stopPropagation();
-            toggleMuteTrack(track.id);
+            onClick={(e) => {
+                e.stopPropagation();
+                toggleMuteTrack(track.id);
             }}
-            >
+        >
             {track.muted ? "🔇" : "🔊"}
-            </Button>
+        </Button>
 
 
-            </div>
+        {/* Loop */}
+        <Button
+            size="small"
+            variant="outlined"
+            sx={{
+                minWidth: 110,
+                fontSize: 11,
+                textTransform: "none",
+                color:
+                    track.loop === false
+                        ? colors.danger
+                        : colors.primary,
+                borderColor:
+                    track.loop === false
+                        ? colors.danger
+                        : colors.border
+            }}
+            onClick={(e) => {
+                e.stopPropagation();
+                toggleTrackLoop(track.id);
+            }}
+        >
+            {track.loop === false
+                ? "↻ Loop"
+                : "Do Not Loop"}
+        </Button>
+
+    </div>
+
 
 
 
