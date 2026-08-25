@@ -444,19 +444,28 @@ const changeTrackVolume = (id, volume) => {
 
 const addTrack = () => {
 
+    const newTrack = {
+        id: Date.now(),
+        name: `Track ${tracksRef.current.length + 1}`,
+        chords: [],
+        muted: false,
+        volume: 0.8,
+        color: trackColors[
+            tracksRef.current.length % trackColors.length
+        ]
+    };
+
     setTracks(prev => [
         ...prev,
-        {
-            id: Date.now(),
-            name: `Track ${prev.length + 1}`,
-            chords: [],
-            muted: false,
-            volume: 0.8,
-            color: trackColors[prev.length % trackColors.length]
-        }
+        newTrack
     ]);
 
+    setTrackPlayheads(prev => ({
+        ...prev,
+        [newTrack.id]: 0
+    }));
 };
+
 
 
 const duplicateTrack = (id) => {
@@ -515,40 +524,34 @@ const renameTrack = () => {
 
 const deleteTrack = (id) => {
 
-  setTracks(prev => {
+    setTracks(prev => {
 
-    const remainingTracks = prev.filter(
-      t => t.id !== id
-    );
+        const remainingTracks = prev.filter(
+            track => track.id !== id
+        );
 
-    if (remainingTracks.length === 0) {
-      playingRef.current = false;
-      pausedRef.current = false;
-      clearTimeout(timerRef.current);
-      setIsPlaying(false);
-    }
+        if (remainingTracks.length === 0) {
+            stopProgression();
+        }
 
-    return remainingTracks;
-
-  });
-
-  currentStepRef.current = 0;
-
-    setTrackPlayheads(() => {
-
-        const reset = {};
-
-        tracksRef.current.forEach(track => {
-
-            reset[track.id] = 0;
-
-        });
-
-        return reset;
-
+        return remainingTracks;
     });
 
+    setTrackPlayheads(prev => {
+
+        const next = { ...prev };
+
+        delete next[id];
+
+        return next;
+    });
+
+    // Remove deleted track from playback state.
+    delete playbackStateRef.current[id];
+
+    currentStepRef.current = 0;
 };
+
 
 
 const toggleMuteTrack = (id) => {
@@ -808,7 +811,14 @@ const itemToMidi = (item) => {
 
 };
 
-const playStep = async (chords) => {
+const playStep = async (chords, playbackId) => {
+
+    if (
+        !playingRef.current ||
+        playbackId !== playbackIdRef.current
+    ) {
+        return;
+    }
 
     setActiveChords(
         chords.map(chord => chord.uiId)
@@ -826,9 +836,6 @@ const playStep = async (chords) => {
             const currentBeat =
                 chord.state.beat;
 
-            /*
-             * Find the next retrigger point.
-             */
             let durationBeats = 1;
 
             for (
@@ -844,11 +851,6 @@ const playStep = async (chords) => {
                 durationBeats++;
             }
 
-            /*
-             * Play only until the next
-             * retrigger point, or until
-             * the chord ends.
-             */
             await playChord(
                 midiNotes,
                 durationBeats,
@@ -862,13 +864,30 @@ const playStep = async (chords) => {
         })
     );
 
+    /*
+     * Playback may have been stopped while
+     * playChord() was running.
+     */
+    if (
+        !playingRef.current ||
+        playbackId !== playbackIdRef.current
+    ) {
+        return;
+    }
+
     setTimeout(() => {
 
-        setActiveChords([]);
+        if (
+            playingRef.current &&
+            playbackId === playbackIdRef.current
+        ) {
+            setActiveChords([]);
+        }
 
     }, (60 / bpmRef.current) * 1000);
 
 };
+
 
 
 
@@ -892,14 +911,22 @@ const playStep = async (chords) => {
   const [isPlaying, setIsPlaying] = useState(false);
 
 
-  const sleep = (ms) =>
+  const sleep = (ms, playbackId) =>
     new Promise(resolve => {
 
         timerRef.current = setTimeout(() => {
+
             timerRef.current = null;
-            resolve();
+
+            resolve(
+                playingRef.current &&
+                playbackId === playbackIdRef.current
+            );
+
         }, ms);
+
     });
+
 
 
     const tracksRef = useRef([]);
@@ -922,6 +949,7 @@ const playAllTracks = async () => {
     pausedRef.current = false;
 
     setIsPlaying(true);
+    setActiveChords([]);
 
     // Reset playback state
     playbackStateRef.current = {};
@@ -938,7 +966,20 @@ const playAllTracks = async () => {
     });
 
     currentBeatRef.current = 0;
+    currentBeatInStepRef.current = 0;
+    currentBeatRef.current = 0;
     setPlayhead(0);
+
+    setTrackPlayheads(() => {
+
+        const reset = {};
+
+        tracksRef.current.forEach(track => {
+            reset[track.id] = 0;
+        });
+
+        return reset;
+    });
 
 
     while (
@@ -971,6 +1012,38 @@ const playAllTracks = async () => {
             continue;
         }
 
+
+        /*
+        * Make sure every current track has
+        * a playback state.
+        */
+        tracksRef.current.forEach(track => {
+
+            if (!playbackStateRef.current[track.id]) {
+
+                playbackStateRef.current[track.id] = {
+                    trackId: track.id,
+                    step: 0,
+                    beat: 0,
+                    repeat: 0
+                };
+
+            }
+
+        });
+
+
+        const currentTrackIds = new Set(
+            tracksRef.current.map(track => track.id)
+        );
+
+        Object.keys(playbackStateRef.current).forEach(id => {
+
+            if (!currentTrackIds.has(Number(id))) {
+                delete playbackStateRef.current[id];
+            }
+
+        });
 
         /*
          * Get the current chord from every track.
@@ -1038,9 +1111,16 @@ const playAllTracks = async () => {
             /*
              * One beat.
              */
-            await sleep(
-                (60 / bpmRef.current) * 1000
-            );
+            const shouldContinue =
+                await sleep(
+                    (60 / bpmRef.current) * 1000,
+                    playbackId
+                );
+
+            if (!shouldContinue) {
+                break;
+            }
+
 
         }
         catch (error) {
@@ -1081,6 +1161,16 @@ const playAllTracks = async () => {
 
             const chord =
                 track.chords[state.step];
+
+            if (!chord) {
+
+                state.step = 0;
+                state.beat = 0;
+                state.repeat = 0;
+
+                return;
+            }
+
 
 
             state.beat++;
@@ -1145,15 +1235,23 @@ const playAllTracks = async () => {
 
             const next = { ...prev };
 
-            Object.values(playbackStateRef.current).forEach(state => {
+            tracksRef.current.forEach(track => {
 
-                next[state.trackId] = state.step;
+                const state =
+                    playbackStateRef.current[track.id];
 
+                if (!state) {
+                    next[track.id] = 0;
+                    return;
+                }
+
+                next[track.id] =
+                    state.step;
             });
 
             return next;
-
         });
+
 
     }
 
@@ -1244,38 +1342,57 @@ const pauseProgression = () => {
 
 const stopProgression = () => {
 
+    // Invalidate the currently running playback loop.
     playbackIdRef.current++;
-  stopAllNotes();
-  // stop loop
-  playingRef.current = false;
 
-  // release pause
-  pausedRef.current = false;
+    // Stop all currently sounding notes immediately.
+    stopAllNotes();
 
+    // Stop playback loop.
+    playingRef.current = false;
+    pausedRef.current = false;
 
-  // cancel current HTTP request
-  if(abortControllerRef.current){
+    // Cancel any pending timer.
+    if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+    }
 
-    abortControllerRef.current.abort();
+    // Cancel pending HTTP/audio operation if one exists.
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+    }
 
-    abortControllerRef.current = null;
+    // Reset all playback positions.
+    currentStepRef.current = 0;
+    currentBeatInStepRef.current = 0;
+    currentBeatRef.current = 0;
 
-  }
+    playbackStateRef.current = {};
 
+    // Reset global playhead.
+    setPlayhead(0);
 
-  // cancel sleep timer
-  clearTimeout(timerRef.current);
+    // IMPORTANT:
+    // Reset every track's playhead.
+    setTrackPlayheads(() => {
+        const reset = {};
 
+        tracksRef.current.forEach(track => {
+            reset[track.id] = 0;
+        });
 
-  // reset position
-  currentStepRef.current = 0;
-  setPlayhead(0);
+        return reset;
+    });
 
+    // Remove active chord highlighting.
+    setActiveChords([]);
 
-  // reset UI
-  setIsPlaying(false);
-
+    // Reset UI.
+    setIsPlaying(false);
 };
+
 
 
 
