@@ -77,8 +77,12 @@ function SortableChord({
     track,
     activeChords,
     colors,
-    onEdit
+    onEdit,
+    onDuplicate,
+    onDelete
 }) {
+
+    const [chordMenuAnchor, setChordMenuAnchor] = useState(null);
 
     const {
         attributes,
@@ -153,41 +157,80 @@ function SortableChord({
             {...listeners}
         >
 
-            <IconButton
-                size="small"
-                onPointerDown={(e)=>{
-                    e.stopPropagation();
-                }}
-                onClick={(e)=>{
+        <IconButton
+            size="small"
 
+            onPointerDown={(e) => {
+                e.stopPropagation();
+            }}
+
+            onClick={(e) => {
+                e.stopPropagation();
+                setChordMenuAnchor(e.currentTarget);
+            }}
+
+            sx={{
+                position:"absolute",
+                top:2,
+                right:2,
+                width:26,
+                height:26,
+                color:active
+                    ? "white"
+                    : colors.text,
+                opacity:0.7,
+
+                "&:hover":{
+                    opacity:1,
+                    backgroundColor:colors.primaryLight
+                }
+            }}
+        >
+            <MoreVertIcon fontSize="small"/>
+        </IconButton>
+
+        <Menu
+            anchorEl={chordMenuAnchor}
+            open={Boolean(chordMenuAnchor)}
+            onClose={() => setChordMenuAnchor(null)}
+        >
+            <MenuItem
+                onClick={(e) => {
                     e.stopPropagation();
+
+                    setChordMenuAnchor(null);
 
                     onEdit(index);
-
                 }}
-
-                sx={{
-                    position:"absolute",
-                    top:2,
-                    right:2,
-                    width:26,
-                    height:26,
-                    color:active
-                        ? "white"
-                        : colors.text,
-                    opacity:0.7,
-
-                    "&:hover":{
-                        opacity:1,
-                        backgroundColor:colors.primaryLight
-                    }
-                }}
-
             >
+                Edit
+            </MenuItem>
 
-                <MoreVertIcon fontSize="small"/>
+            <MenuItem
+                onClick={(e) => {
+                    e.stopPropagation();
 
-            </IconButton>
+                    setChordMenuAnchor(null);
+
+                    onDuplicate(index);
+                }}
+            >
+                Duplicate
+            </MenuItem>
+
+            <MenuItem
+                onClick={(e) => {
+                    e.stopPropagation();
+
+                    setChordMenuAnchor(null);
+
+                    onDelete(index);
+                }}
+            >
+                Delete
+            </MenuItem>
+        </Menu>
+
 
 
             <div
@@ -581,22 +624,57 @@ const addChordToTrack = () => {
 };
 
 
-const deleteChordFromTrack = (trackId, chordIndex) => {
+const duplicateChordInTrack = (trackId, chordIndex) => {
 
-  setTracks(
-    tracks.map(track =>
-      track.id === trackId
-      ? {
-          ...track,
-          chords: track.chords.filter(
-            (_, i) => i !== chordIndex
-          )
-        }
-      : track
-    )
-  );
+    setTracks(prev =>
+        prev.map(track => {
+
+            if (track.id !== trackId) {
+                return track;
+            }
+
+            const chord = track.chords[chordIndex];
+
+            if (!chord) {
+                return track;
+            }
+
+            const copy = {
+                ...chord
+            };
+
+            return {
+                ...track,
+                chords: [
+                    ...track.chords.slice(0, chordIndex + 1),
+                    copy,
+                    ...track.chords.slice(chordIndex + 1)
+                ]
+            };
+
+        })
+    );
 
 };
+
+
+const deleteChordFromTrack = (trackId, chordIndex) => {
+
+    setTracks(prev =>
+        prev.map(track =>
+            track.id === trackId
+                ? {
+                    ...track,
+                    chords: track.chords.filter(
+                        (_, i) => i !== chordIndex
+                    )
+                }
+                : track
+        )
+    );
+
+};
+
 
 
 const createPattern = (beats, existingPattern = []) => {
@@ -1458,7 +1536,7 @@ const stopProgression = () => {
                             (trackPlayheads[track.id] ?? 0) %
                             Math.max(track.chords.length, 1)
                         ) * 80
-                        + (isPlaying ? 70 : 0)
+                        + (isPlaying ? 80 : 0)
                     }px`,
                     top:-5,
                     height:80,
@@ -1504,60 +1582,52 @@ const stopProgression = () => {
 
 
         <SortableChord
-
             key={`${track.id}-${i}`}
-
             chord={c}
-
             index={i}
-
             track={track}
-
             activeChords={activeChords}
-
             colors={colors}
 
-            onEdit={(index)=>{
-
+            onEdit={(index) => {
 
                 setSelectedChord({
-
-                    trackId:track.id,
-
+                    trackId: track.id,
                     index
-
                 });
 
-
-                const chord =
-                    track.chords[index];
-
+                const chord = track.chords[index];
 
                 setEditChord({
-
                     ...chord,
-
-                    octave:String(chord.octave),
-
-                    inversion:String(chord.inversion),
-
-                    beats:String(chord.beats),
-
+                    octave: String(chord.octave),
+                    inversion: String(chord.inversion),
+                    beats: String(chord.beats),
                     repeat: String(chord.repeat ?? 1),
-
-                    wait:String(chord.wait),
-
+                    wait: String(chord.wait),
                     pattern: createPattern(
                         chord.beats,
                         chord.pattern
                     )
-
                 });
-
 
             }}
 
+            onDuplicate={(index) => {
+                duplicateChordInTrack(
+                    track.id,
+                    index
+                );
+            }}
+
+            onDelete={(index) => {
+                deleteChordFromTrack(
+                    track.id,
+                    index
+                );
+            }}
         />
+
 
 
         ))
