@@ -37,6 +37,7 @@ import {
 
 import { CSS } from "@dnd-kit/utilities";
 
+import RepeatIcon from "@mui/icons-material/Repeat";
 
 {
 /*
@@ -1691,27 +1692,54 @@ const stopProgression = () => {
             size="small"
             variant="outlined"
             sx={{
-                minWidth: 110,
-                fontSize: 11,
-                textTransform: "none",
+                minWidth: 50,
+                width: 50,
+                height: 32,
+                padding: 0,
+
                 color:
                     track.loop === false
-                        ? colors.danger
+                        ? "#999"
                         : colors.primary,
+
                 borderColor:
                     track.loop === false
-                        ? colors.danger
+                        ? "#ccc"
                         : colors.border
             }}
+
             onClick={(e) => {
                 e.stopPropagation();
                 toggleTrackLoop(track.id);
             }}
         >
-            {track.loop === false
-                ? "↻ Loop"
-                : "Do Not Loop"}
+            <span
+                style={{
+                    position: "relative",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                }}
+            >
+                <RepeatIcon fontSize="small" />
+
+                {track.loop === false && (
+                    <span
+                        style={{
+                            position: "absolute",
+                            width: 24,
+                            height: 2,
+                            background: "#999",
+                            transform: "rotate(-45deg)",
+                            borderRadius: 2
+                        }}
+                    />
+                )}
+            </span>
         </Button>
+
+
+
 
     </div>
 
