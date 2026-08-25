@@ -696,8 +696,8 @@ const editChordData = () => {
 
     if (!editChord.name.trim()) return;
 
-    setTracks(
-        tracks.map(track =>
+    setTracks(prev =>
+        prev.map(track =>
             track.id === selectedChord.trackId
                 ? {
                     ...track,
@@ -706,13 +706,30 @@ const editChordData = () => {
                             ? {
                                 ...editChord,
 
-                                // convert strings back to numbers
-                                octave: Number(editChord.octave),
-                                inversion: Number(editChord.inversion),
-                                beats: Number(editChord.beats),
-                                repeat: Number(editChord.repeat),
-                                wait: Number(editChord.wait),
-                                speed: Number(editChord.speed)
+                                type:
+                                    editChord.type === "note"
+                                        ? "note"
+                                        : "chord",
+
+                                octave:
+                                    Number(editChord.octave),
+
+                                inversion:
+                                    editChord.type === "note"
+                                        ? 0
+                                        : Number(editChord.inversion),
+
+                                beats:
+                                    Number(editChord.beats),
+
+                                repeat:
+                                    Number(editChord.repeat),
+
+                                wait:
+                                    Number(editChord.wait),
+
+                                speed:
+                                    Number(editChord.speed)
                             }
                             : chord
                     )
@@ -724,6 +741,7 @@ const editChordData = () => {
     setSelectedChord(null);
 
     setEditChord({
+        type: "chord",
         name: "",
         octave: "4",
         inversion: "0",
@@ -735,6 +753,7 @@ const editChordData = () => {
         pattern: [true]
     });
 };
+
 
 
 
@@ -1769,18 +1788,44 @@ const stopProgression = () => {
         fullWidth
     >
 
-        <DialogTitle>
-            Edit {editChord.type === "note" ? "Note" : "Chord"}
-        </DialogTitle>
+    <DialogTitle>
+        Edit {editChord.type === "note" ? "Note" : "Chord"}
+    </DialogTitle>
 
-        <DialogContent>
+    <Tabs
+        value={editChord.type === "chord" ? 0 : 1}
+        onChange={(e, value) => {
+
+            const newType =
+                value === 0
+                    ? "chord"
+                    : "note";
+
+            setEditChord(prev => ({
+                ...prev,
+                type: newType,
+                inversion:
+                    newType === "note"
+                        ? "0"
+                        : prev.inversion
+            }));
+
+        }}
+        centered
+    >
+        <Tab label="Edit Chord" />
+        <Tab label="Edit Note" />
+    </Tabs>
+
+    <DialogContent>
+
 
             <Grid container spacing={2} sx={{ mt: 1 }}>
 
                 <Grid size={12}>
                     <TextField
                         fullWidth
-                        label="Chord Name"
+                        label={editChord.type === "note" ? "Note" : "Chord Name"}
                         value={editChord.name}
                         onChange={(e)=>
                             setEditChord({
