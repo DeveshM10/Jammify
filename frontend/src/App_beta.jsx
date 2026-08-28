@@ -92,7 +92,10 @@ function SortableChord({
         transform,
         transition
     } = useSortable({
-        id: `${track.id}-${index}`
+        id: `${track.id}-${index}`,
+        data: {
+            index
+        }
     });
 
 
@@ -145,7 +148,7 @@ function SortableChord({
 
         cursor:"grab",
         userSelect:"none",
-        touchAction:"none",
+        touchAction:"pan-y"
     };
 
 
@@ -290,14 +293,14 @@ function App() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
         activationConstraint: {
-            distance: 5
+            distance: 8
         }
     }),
 
     useSensor(TouchSensor, {
         activationConstraint: {
-            delay: 150,
-            tolerance: 5
+            delay: 250,
+            tolerance: 8
         }
     })
   );
@@ -336,55 +339,45 @@ function App() {
     });
 
     
-const handleDragEnd = (trackId, event)=>{
+const handleDragEnd = (trackId, event) => {
 
-    const {
-        active,
-        over
-    } = event;
+    const { active, over } = event;
 
-
-    if(!over) return;
-
-
-    if(active.id === over.id)
+    if (!over || active.id === over.id) {
         return;
+    }
 
+    const oldIndex = active.data.current?.index;
+    const newIndex = over.data.current?.index;
+
+    if (
+        oldIndex == null ||
+        newIndex == null ||
+        oldIndex === newIndex
+    ) {
+        return;
+    }
 
     setTracks(prev =>
+        prev.map(track => {
 
-        prev.map(track=>{
-
-
-            if(track.id !== trackId)
+            if (track.id !== trackId) {
                 return track;
-
-
-            const oldIndex =
-                Number(active.id.split("-")[1]);
-
-
-            const newIndex =
-                Number(over.id.split("-")[1]);
-
+            }
 
             return {
-
                 ...track,
-
                 chords: arrayMove(
                     track.chords,
                     oldIndex,
                     newIndex
                 )
-
             };
 
         })
-
     );
-
 };
+
     
 
   const [newChord, setNewChord] = useState({
