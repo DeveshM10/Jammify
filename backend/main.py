@@ -1,11 +1,16 @@
 # main.py
 from chord_player import play_chord, stop_chords
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import threading
 from pydantic import BaseModel
 from metronome import set_tempo, BPM, BEATS_PER_BAR
+
+
+from song_chord_importer import import_chords_from_url
+
+
 
 class TempoSettings(BaseModel):
     bpm: int
@@ -19,6 +24,8 @@ class Chord(BaseModel):
     volume: float
     wait: float
 
+class ImportChordsRequest(BaseModel):
+    url: str
 
 app = FastAPI()
 
@@ -117,6 +124,31 @@ def play_step(chords: list[Chord]):
         "message": "received",
         "chords": chords
     }
+
+
+@app.post("/import-chords")
+def import_chords(request: ImportChordsRequest):
+
+    try:
+
+        result = import_chords_from_url(
+            request.url
+        )
+
+        return result
+
+    except Exception as e:
+
+        print(
+            "IMPORT ERROR:",
+            repr(e)
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
 
 '''
 def play_step(chords: list[Chord]):

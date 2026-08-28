@@ -1422,6 +1422,57 @@ const stopProgression = () => {
 };
 
 
+// get chords from url
+
+const [songUrl, setSongUrl] = useState("");
+const [importedSong, setImportedSong] = useState(null);
+const [importing, setImporting] = useState(false);
+const [importError, setImportError] = useState("");
+
+async function importSong() {
+  if (!songUrl.trim()) return;
+
+  setImporting(true);
+  setImportError("");
+
+  try {
+    const response = await fetch(
+      `${API_URL}/import-song`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          url: songUrl,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      throw new Error(
+        data.error || "Failed to import song"
+      );
+    }
+
+    setImportedSong(data);
+
+  } catch (error) {
+    console.error(error);
+
+    setImportError(
+      error.message || "Failed to import song"
+    );
+
+  } finally {
+    setImporting(false);
+  }
+}
+
+
+
 
 
 
@@ -1445,6 +1496,56 @@ const stopProgression = () => {
       }}
 
     >
+
+    {/* Song Import */}
+
+    <div
+        style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            width: "90%",
+            maxWidth: 800
+        }}
+    >
+
+        <TextField
+            fullWidth
+            size="small"
+            label="Ultimate Guitar URL"
+            placeholder="Paste Ultimate Guitar song URL"
+            value={songUrl}
+            onChange={(e) => setSongUrl(e.target.value)}
+            disabled={importing}
+        />
+
+        <Button
+            variant="contained"
+            onClick={importSong}
+            disabled={!songUrl.trim() || importing}
+            sx={{
+                backgroundColor: colors.primary,
+                borderRadius: 3,
+                textTransform: "none",
+                whiteSpace: "nowrap"
+            }}
+        >
+            {importing ? "Importing..." : "Import"}
+        </Button>
+
+    </div>
+
+    {importError && (
+        <div
+            style={{
+                color: colors.danger,
+                fontSize: 14
+            }}
+        >
+            {importError}
+        </div>
+    )}
+
 
 
       {/* Controls */}
