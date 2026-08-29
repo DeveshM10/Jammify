@@ -279,10 +279,7 @@ function SortableChord({
 function App() {
 
 
-    // render
-    // Use local backend for hackathon development
-    // Change to "https://jammify-3.onrender.com" for production
-    const API_URL = "http://localhost:8000";
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
     
     const colors = {
     background: "#F7F5FF",
@@ -1053,10 +1050,11 @@ const playAllTracks = async () => {
 
         // Nothing to play
         if (maxLength === 0) {
-
-            await sleep(50);
-
-            continue;
+            playingRef.current = false;
+            setIsPlaying(false);
+            setActiveChords([]);
+            stopAllNotes();
+            break;
         }
 
 
@@ -1347,42 +1345,35 @@ const playAllTracks = async () => {
 
 const startPlayback = async () => {
 
-    /*
-     * Unlock Web Audio after the user's
-     * button click.
-     */
-    await unlockAudio();
-
-
-    /*
-     * Give the AudioContext a moment
-     * to become active.
-     */
-    await new Promise(resolve =>
-        setTimeout(resolve, 100)
+    const hasPlayableTrack = tracksRef.current.some(
+        track =>
+            Array.isArray(track.chords) &&
+            track.chords.length > 0 &&
+            !track.muted
     );
 
-
-    /*
-     * If playback is already running,
-     * this means the user is resuming
-     * from pause.
-     */
-    if (playingRef.current) {
-
-        pausedRef.current = false;
-
-        setIsPlaying(true);
-
+    if (!hasPlayableTrack) {
+        setImportError("Import a song or generate a band before pressing Play.");
         return;
     }
 
+    try {
+        await unlockAudio();
+    } catch (error) {
+        console.error("Audio unlock failed:", error);
+        setImportError("Audio failed to unlock. Please tap Play once more.");
+        return;
+    }
 
-    /*
-     * Start a completely new playback.
-     */
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    if (playingRef.current) {
+        pausedRef.current = false;
+        setIsPlaying(true);
+        return;
+    }
+
     playAllTracks();
-
 };
 
 
@@ -1550,13 +1541,15 @@ const makeBandTrack = (name, instrument, volume, chords, color, preset = "defaul
   color
 });
 
-const generateLocalBand = () => {
-  if (!importedSong || !Array.isArray(importedSong.chords) || importedSong.chords.length === 0) {
+const generateLocalBand = (song = importedSong) => {
+  if (!song || !Array.isArray(song.chords) || song.chords.length === 0) {
     setImportError("Import a song first to generate the band.");
     return;
   }
 
-  const songChords = importedSong.chords.map(chord => ({
+  stopProgression();
+
+  const songChords = song.chords.map(chord => ({
     ...chord,
     name: chord.name || "C"
   }));
@@ -1570,7 +1563,7 @@ const generateLocalBand = () => {
   }));
 
   const bassTrack = makeBandTrack(
-    `${importedSong.title ? importedSong.title.split(" ")[0] : "Bass"} Bass`,
+    `${song.title ? song.title.split(" ")[0] : "Bass"} Bass`,
     "finger_bass",
     0.72,
     songChords,
@@ -1616,11 +1609,7 @@ const generateLocalBand = () => {
 
   const nextTracks = [bassTrack, pianoTrack, rhythmTrack, fluteTrack, violinTrack];
 
-  setTracks(prev => {
-    const baseTracks = prev.length > 0 ? prev : [];
-    return [...baseTracks, ...nextTracks];
-  });
-
+  setTracks(nextTracks);
   setSelectedTrack(bassTrack.id);
   setImportError("");
 };
@@ -1654,6 +1643,7 @@ async function importSong() {
     }
 
     setImportedSong(data);
+    generateLocalBand(data);
 
   } catch (error) {
     console.error(error);
