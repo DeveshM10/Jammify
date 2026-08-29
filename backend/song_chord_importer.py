@@ -165,11 +165,24 @@ def extract_chords_from_content(content: str):
 
 def import_chords_from_url(url: str):
 
+    parsed = urlparse(url)
+    path = (parsed.path or "").lower()
+
+    if "/backing_track/" in path:
+        raise ValueError(
+            "This URL is a backing track page, not a chord tab. Please paste a standard Ultimate Guitar song/chord page URL."
+        )
+
     html = fetch_page(url)
 
     title = get_page_title(html)
 
-    content = extract_wiki_content(html)
+    try:
+        content = extract_wiki_content(html)
+    except ValueError as exc:
+        raise ValueError(
+            "This Ultimate Guitar page does not contain a chord sheet. Please use a regular song tab/chord URL instead."
+        ) from exc
 
     chords = extract_chords_from_content(
         content
