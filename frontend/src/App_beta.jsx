@@ -62,13 +62,25 @@ import {
 } from "./audio";
 
 
-const instruments = [
-    "acoustic_grand_piano",
-    "electric_grand_piano",
-    "church_organ",
-    "finger_bass",
-    "rock_guitar"
+const instrumentCatalog = [
+    { value: "acoustic_grand_piano", label: "Acoustic Piano", status: "working" },
+    { value: "electric_grand_piano", label: "Electric Piano", status: "working" },
+    { value: "church_organ", label: "Church Organ", status: "working" },
+    { value: "finger_bass", label: "Finger Bass", status: "working" },
+    { value: "rock_guitar", label: "Rock Guitar", status: "working" },
+    { value: "flute", label: "Flute", status: "working" },
+    { value: "violin", label: "Violin", status: "working" },
+    { value: "synth_bass", label: "Synth Bass", status: "planned" },
+    { value: "string_ensemble", label: "String Ensemble", status: "planned" },
+    { value: "trumpet", label: "Trumpet", status: "planned" }
 ];
+
+const instruments = instrumentCatalog
+    .filter(entry => entry.status === "working")
+    .map(entry => entry.value);
+
+const getTrackInstrumentForIndex = (index) =>
+    instruments[index % instruments.length];
 
 
 
@@ -268,7 +280,9 @@ function App() {
 
 
     // render
-    const API_URL = "https://jammify-3.onrender.com";
+    // Use local backend for hackathon development
+    // Change to "https://jammify-3.onrender.com" for production
+    const API_URL = "http://localhost:8000";
     
     const colors = {
     background: "#F7F5FF",
@@ -434,7 +448,18 @@ const changeTrackVolume = (id, volume) => {
     updateAudioTrackVolume(id, volume);
 };
 
-
+const changeTrackInstrument = (id, instrument) => {
+    setTracks(prev =>
+        prev.map(track =>
+            track.id === id
+                ? {
+                    ...track,
+                    instrument
+                }
+                : track
+        )
+    );
+};
 
 const addTrack = () => {
 
@@ -444,6 +469,7 @@ const addTrack = () => {
         chords: [],
         muted: false,
         volume: 0.8,
+        instrument: getTrackInstrumentForIndex(tracksRef.current.length),
         loop: true,
         color: trackColors[
             tracksRef.current.length % trackColors.length
@@ -479,6 +505,7 @@ const duplicateTrack = (id) => {
             ...original,
             id: Date.now(),
             name: `${original.name} Copy`,
+            instrument: original.instrument || "acoustic_grand_piano",
             chords: original.chords.map(chord => ({
                 ...chord
             }))
@@ -587,6 +614,10 @@ const addChordToTrack = () => {
 
     if (!newChord.name.trim()) return;
 
+    const selectedTrack = tracksRef.current.find(track => track.id === editingTrack);
+    const trackInstrument = selectedTrack?.instrument || "acoustic_grand_piano";
+    const chordInstrument = newChord.instrument || trackInstrument;
+
     setTracks(prev =>
         prev.map(track =>
             track.id === editingTrack
@@ -596,6 +627,7 @@ const addChordToTrack = () => {
                         ...track.chords,
                         {
                             ...newChord,
+                            instrument: chordInstrument,
 
                             type:
                                 addTab === 0
@@ -982,6 +1014,7 @@ const playAllTracks = async () => {
     currentBeatRef.current = 0;
     currentBeatInStepRef.current = 0;
     currentBeatRef.current = 0;
+    setProgressionIndex(0);
     setPlayhead(0);
 
     setTrackPlayheads(() => {
@@ -1277,6 +1310,17 @@ const playAllTracks = async () => {
                     state.step;
             });
 
+            const liveSteps = Object.values(playbackStateRef.current)
+                .filter(state => {
+                    const track = tracksRef.current.find(t => t.id === state.trackId);
+                    return !!track && !track.muted;
+                })
+                .map(state => state.step);
+
+            if (liveSteps.length > 0) {
+                setProgressionIndex(Math.min(...liveSteps));
+            }
+
             return next;
         });
 
@@ -1428,6 +1472,158 @@ const [songUrl, setSongUrl] = useState("");
 const [importedSong, setImportedSong] = useState(null);
 const [importing, setImporting] = useState(false);
 const [importError, setImportError] = useState("");
+const [progressionIndex, setProgressionIndex] = useState(0);
+
+const parseChordRoot = (chordName = "") => {
+  const cleaned = chordName.trim();
+  if (!cleaned) return "C";
+
+  const match = cleaned.match(/^([A-G](?:#|b)?)/i);
+  if (!match) return "C";
+
+  return match[1].toUpperCase();
+};
+
+const getBassVariation = (index) => {
+  const cycle = [0, 0, 1, 0, 0, 2, 0, 1];
+  return cycle[index % cycle.length];
+};
+
+const getLeadMelodyNote = (root, index) => {
+  const rootMap = {
+    C: ["C", "E", "G", "A", "B"],
+    D: ["D", "F#", "A", "B", "C"],
+    E: ["E", "G#", "B", "C#", "D"],
+    F: ["F", "A", "C", "D", "E"],
+    G: ["G", "B", "D", "E", "F"],
+    A: ["A", "C#", "E", "G", "B"],
+    B: ["B", "D#", "F#", "G#", "A"],
+  };
+
+  const notes = rootMap[root] || rootMap.C;
+  return notes[index % notes.length];
+};
+
+const makeBandTrack = (name, instrument, volume, chords, color, preset = "default") => ({
+  id: Date.now() + Math.random(),
+  name,
+  chords: chords.map((chord, index) => {
+    const root = parseChordRoot(chord.name || "C");
+    const bassVariation = getBassVariation(index);
+    const melodyNote = getLeadMelodyNote(root, index);
+
+    const base = {
+      type: "chord",
+      name: preset === "bass" ? root : chord.name || "C",
+      octave: preset === "lead" ? 5 : 4,
+      inversion: preset === "bass" ? bassVariation : 0,
+      beats: preset === "pad" ? 2 : 1,
+      repeat: 1,
+      wait: 0,
+      speed: (preset === "bass" && bassVariation === 0)
+        ? 0.25
+        : (preset === "lead" ? 0.55 : 1),
+      instrument,
+      volume,
+      pattern: [true],
+      trackId: null,
+      melodyNote
+    };
+
+    if (preset === "lead") {
+      return {
+        ...base,
+        name: melodyNote,
+        type: "note",
+        speed: 0.8,
+        octave: 5,
+        beats: index % 3 === 0 ? 2 : 1
+      };
+    }
+
+    return base;
+  }),
+  muted: false,
+  volume,
+  instrument,
+  loop: true,
+  color
+});
+
+const generateLocalBand = () => {
+  if (!importedSong || !Array.isArray(importedSong.chords) || importedSong.chords.length === 0) {
+    setImportError("Import a song first to generate the band.");
+    return;
+  }
+
+  const songChords = importedSong.chords.map(chord => ({
+    ...chord,
+    name: chord.name || "C"
+  }));
+
+  const leadChords = songChords.map((chord, index) => ({
+    ...chord,
+    name: parseChordRoot(chord.name),
+    beats: index % 4 === 0 ? 2 : 1,
+    repeat: 1,
+    speed: index % 2 === 0 ? 0.25 : 0.55
+  }));
+
+  const bassTrack = makeBandTrack(
+    `${importedSong.title ? importedSong.title.split(" ")[0] : "Bass"} Bass`,
+    "finger_bass",
+    0.72,
+    songChords,
+    "#00B894",
+    "bass"
+  );
+
+  const pianoTrack = makeBandTrack(
+    "Piano",
+    "acoustic_grand_piano",
+    0.82,
+    songChords,
+    "#6D4AFF",
+    "default"
+  );
+
+  const rhythmTrack = makeBandTrack(
+    "Rhythm",
+    "church_organ",
+    0.68,
+    leadChords,
+    "#FDCB6E",
+    "default"
+  );
+
+  const fluteTrack = makeBandTrack(
+    "Flute Lead",
+    "flute",
+    0.58,
+    leadChords,
+    "#FF6B8A",
+    "lead"
+  );
+
+  const violinTrack = makeBandTrack(
+    "Violin Pad",
+    "violin",
+    0.52,
+    leadChords,
+    "#0984E3",
+    "pad"
+  );
+
+  const nextTracks = [bassTrack, pianoTrack, rhythmTrack, fluteTrack, violinTrack];
+
+  setTracks(prev => {
+    const baseTracks = prev.length > 0 ? prev : [];
+    return [...baseTracks, ...nextTracks];
+  });
+
+  setSelectedTrack(bassTrack.id);
+  setImportError("");
+};
 
 async function importSong() {
   if (!songUrl.trim()) return;
@@ -1533,6 +1729,19 @@ async function importSong() {
             {importing ? "Importing..." : "Import"}
         </Button>
 
+        <Button
+            variant="outlined"
+            onClick={generateLocalBand}
+            disabled={!importedSong || !Array.isArray(importedSong.chords) || importedSong.chords.length === 0}
+            sx={{
+                borderRadius: 3,
+                textTransform: "none",
+                whiteSpace: "nowrap"
+            }}
+        >
+            🤖 Generate Band
+        </Button>
+
     </div>
 
     {importError && (
@@ -1544,6 +1753,86 @@ async function importSong() {
         >
             {importError}
         </div>
+    )}
+
+    {importedSong && (
+      <div
+        style={{
+          width: "90%",
+          maxWidth: 1000,
+          background: "rgba(255,255,255,0.72)",
+          border: `1px solid ${colors.border}`,
+          borderRadius: 18,
+          padding: 18,
+          boxSizing: "border-box",
+          boxShadow: "0 10px 30px rgba(109,74,255,0.08)"
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+            marginBottom: 12,
+            flexWrap: "wrap"
+          }}
+        >
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 800,
+              color: colors.text,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+              opacity: 0.8
+            }}
+          >
+            Live progression
+          </div>
+
+          <div
+            style={{
+              fontSize: 13,
+              color: colors.text,
+              opacity: 0.8,
+              fontWeight: 600
+            }}
+          >
+            {importedSong.title || "Imported Song"}
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+            alignItems: "center"
+          }}
+        >
+          {importedSong.chords.slice(progressionIndex, progressionIndex + 10).map((chord, index) => (
+            <div
+              key={`${chord.name}-${index}-${progressionIndex}`}
+              style={{
+                minWidth: 72,
+                textAlign: "center",
+                padding: "8px 12px",
+                borderRadius: 12,
+                background: index === 0 ? colors.primary : index === 1 ? "#A29BFE" : colors.primaryLight,
+                color: index === 0 ? "white" : colors.text,
+                fontWeight: 800,
+                fontSize: 12,
+                border: `1px solid ${index === 0 ? colors.primary : colors.border}`,
+                boxShadow: index === 0 ? "0 8px 20px rgba(109,74,255,0.18)" : "none"
+              }}
+            >
+              {index === 0 ? "Now" : index === 1 ? "Next" : "Then"}
+              <div style={{ fontSize: 13, marginTop: 4 }}>{chord.name}</div>
+            </div>
+          ))}
+        </div>
+      </div>
     )}
 
 
@@ -1685,7 +1974,34 @@ async function importSong() {
         position:"relative"
         }}
         >
-        
+
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+            alignItems: "center",
+            marginBottom: 4
+          }}
+        >
+          {tracks.slice(0, 6).map((track, index) => (
+            <div
+              key={`band-${track.id}`}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 999,
+                background: track.color || colors.primaryLight,
+                color: "white",
+                fontSize: 11,
+                fontWeight: 700,
+                opacity: 0.95,
+                border: `1px solid ${track.color || colors.primary}`
+              }}
+            >
+              {track.name}
+            </div>
+          ))}
+        </div>
 
 
 
@@ -1736,21 +2052,56 @@ async function importSong() {
             {track.name}
         </div>
 
-        <Slider
-            orientation="vertical"
-            min={0}
-            max={1}
-            step={0.01}
-            value={track.volume}
-            onChange={(e, value) => {
-                e.stopPropagation();
-                changeTrackVolume(track.id, value);
+        <div
+            style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 8
             }}
-            sx={{
-                height: 90,
-                color: colors.primary
-            }}
-        />
+        >
+            <TextField
+                select
+                size="small"
+                value={track.instrument || "acoustic_grand_piano"}
+                onChange={(e) => {
+                    e.stopPropagation();
+                    changeTrackInstrument(track.id, e.target.value);
+                }}
+                sx={{
+                    minWidth: 170,
+                    backgroundColor: "white",
+                    borderRadius: 1
+                }}
+            >
+                {instrumentCatalog.map(inst => (
+                    <MenuItem
+                        key={inst.value}
+                        value={inst.value}
+                        disabled={inst.status === "planned"}
+                    >
+                        {inst.label}
+                        {inst.status === "planned" ? " (next)" : ""}
+                    </MenuItem>
+                ))}
+            </TextField>
+
+            <Slider
+                orientation="vertical"
+                min={0}
+                max={1}
+                step={0.01}
+                value={track.volume}
+                onChange={(e, value) => {
+                    e.stopPropagation();
+                    changeTrackVolume(track.id, value);
+                }}
+                sx={{
+                    height: 90,
+                    color: colors.primary
+                }}
+            />
+        </div>
 
 
     <div
@@ -1971,7 +2322,7 @@ async function importSong() {
             inversion: "0",
             beats: "1",
             repeat: "1",
-            instrument: "acoustic_grand_piano",
+            instrument: track.instrument || "acoustic_grand_piano",
             wait: "0",
             speed: "1",
             pattern: [true]
@@ -2838,12 +3189,14 @@ async function importSong() {
                         })
                     }
                 >
-                    {instruments.map(inst=>(
+                    {instrumentCatalog.map(inst => (
                         <MenuItem
-                            key={inst}
-                            value={inst}
+                            key={inst.value}
+                            value={inst.value}
+                            disabled={inst.status === "planned"}
                         >
-                            {inst.replaceAll("_"," ")}
+                            {inst.label}
+                            {inst.status === "planned" ? " (next)" : ""}
                         </MenuItem>
                     ))}
                 </TextField>

@@ -42,6 +42,41 @@ const instrumentUrls = {
         "G3": "G3.wav",
         "B3": "B3.wav",
         "E4": "E4.wav",
+    },
+
+    flute: {
+        "C4": "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        "A4": "A4.mp3",
+    },
+
+    violin: {
+        "C4": "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        "A4": "A4.mp3",
+    },
+
+    synth_bass: {
+        "E2": "E2.mp3",
+        "A2": "A2.mp3",
+        "D3": "D3.mp3",
+        "G3": "G3.mp3",
+    },
+
+    string_ensemble: {
+        "C4": "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        "A4": "A4.mp3",
+    },
+
+    trumpet: {
+        "C4": "C4.mp3",
+        "D#4": "Ds4.mp3",
+        "F#4": "Fs4.mp3",
+        "A4": "A4.mp3",
     }
 };
 
@@ -59,7 +94,22 @@ const baseUrls = {
         "https://tonejs.github.io/audio/bass-electric/",
 
     rock_guitar:
-        "/rock_guitar/"
+        "/rock_guitar/",
+
+    flute:
+        "https://tonejs.github.io/audio/flute/",
+
+    violin:
+        "https://tonejs.github.io/audio/violin/",
+
+    synth_bass:
+        "https://tonejs.github.io/audio/synth/",
+
+    string_ensemble:
+        "https://tonejs.github.io/audio/strings/",
+
+    trumpet:
+        "https://tonejs.github.io/audio/trumpet/"
 };
 
 

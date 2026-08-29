@@ -1,5 +1,6 @@
 # main.py
-from chord_player import play_chord, stop_chords
+# Audio playback moved to Tone.js frontend - FluidSynth not needed
+# from chord_player import play_chord, stop_chords
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -84,7 +85,8 @@ def play(chord: str, mode: str = "normal"):
 
 @app.get("/stop")
 def stop():
-    stop_chords()
+    # Audio playback moved to Tone.js frontend
+    # stop_chords()
 
     return {
         "message": "stopped"
@@ -127,6 +129,7 @@ def play_step(chords: list[Chord]):
 
 
 @app.post("/import-chords")
+@app.post("/import-song")  # Alias for frontend compatibility
 def import_chords(request: ImportChordsRequest):
 
     try:
