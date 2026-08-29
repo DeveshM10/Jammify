@@ -10,6 +10,7 @@ from metronome import set_tempo, BPM, BEATS_PER_BAR
 
 
 from song_chord_importer import import_chords_from_url
+from supabase_service import save_jam_to_supabase, load_jams_from_supabase
 
 
 
@@ -27,6 +28,14 @@ class Chord(BaseModel):
 
 class ImportChordsRequest(BaseModel):
     url: str
+
+class SaveJamRequest(BaseModel):
+    name: str
+    bpm: int = 120
+    beats_per_bar: int = 4
+    arrangement: dict = {}
+    song_id: str | None = None
+    user_id: str | None = None
 
 app = FastAPI()
 
@@ -151,6 +160,31 @@ def import_chords(request: ImportChordsRequest):
             status_code=500,
             detail=str(e)
         )
+
+
+@app.post("/save-jam")
+def save_jam(request: SaveJamRequest):
+    try:
+        result = save_jam_to_supabase(
+            name=request.name,
+            bpm=request.bpm,
+            beats_per_bar=request.beats_per_bar,
+            arrangement=request.arrangement,
+            song_id=request.song_id,
+            user_id=request.user_id,
+        )
+        return {"success": True, "data": result}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/load-jams")
+def load_jams(user_id: str | None = None):
+    try:
+        result = load_jams_from_supabase(user_id=user_id)
+        return {"success": True, "data": result}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 '''

@@ -61,6 +61,12 @@ import {
 
 } from "./audio";
 
+import {
+    buildBandFromSong,
+    buildDemoBand,
+    styleOptions
+} from "./aiBandEngine";
+
 
 const instrumentCatalog = [
     { value: "acoustic_grand_piano", label: "Acoustic Piano", status: "working" },
@@ -327,6 +333,11 @@ function App() {
 
   const [tempoDialogOpen, setTempoDialogOpen] = useState(false);
   const [beatsPerBar, setBeatsPerBar] = useState(4);
+  const [bandStyle, setBandStyle] = useState("pop");
+  const [jamName, setJamName] = useState("My Jam");
+  const [savedJams, setSavedJams] = useState([]);
+  const [savingJam, setSavingJam] = useState(false);
+  const [loadingJams, setLoadingJams] = useState(false);
 
 
   const [editingTrack, setEditingTrack] = useState(null);
@@ -1456,6 +1467,106 @@ const stopProgression = () => {
     setIsPlaying(false);
 };
 
+const saveCurrentJam = async () => {
+    const trimmedName = jamName.trim() || `Jam ${new Date().toLocaleString()}`;
+
+    const payload = {
+        name: trimmedName,
+        bpm: Number(bpm) || 120,
+        beats_per_bar: Number(beatsPerBar) || 4,
+        arrangement: {
+            tracks,
+            importedSong,
+            bpm: Number(bpm) || 120,
+            beats_per_bar: Number(beatsPerBar) || 4,
+            selectedTrack,
+            progressionIndex,
+        },
+        song_id: importedSong?.id ?? null,
+        user_id: null,
+    };
+
+    setSavingJam(true);
+
+    try {
+        const response = await fetch(`${API_URL}/save-jam`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || data?.success === false) {
+            throw new Error(data?.detail || data?.error || "Could not save the jam.");
+        }
+
+        const savedRecord = Array.isArray(data?.data) ? data.data[0] : data?.data;
+        if (savedRecord) {
+            setSavedJams(prev => [savedRecord, ...prev.filter(item => item.id !== savedRecord.id)]);
+        }
+
+        setJamName(trimmedName);
+        setImportError("");
+    } catch (error) {
+        console.error("Save jam failed:", error);
+        setImportError(error.message || "Unable to save the jam.");
+    } finally {
+        setSavingJam(false);
+    }
+};
+
+const loadSavedJams = async () => {
+    setLoadingJams(true);
+
+    try {
+        const response = await fetch(`${API_URL}/load-jams`, {
+            method: "GET",
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || data?.success === false) {
+            throw new Error(data?.detail || data?.error || "Could not load saved jams.");
+        }
+
+        const items = Array.isArray(data?.data) ? data.data : [];
+        setSavedJams(items);
+    } catch (error) {
+        console.error("Load jams failed:", error);
+        setImportError(error.message || "Unable to load saved jams.");
+    } finally {
+        setLoadingJams(false);
+    }
+};
+
+const restoreSavedJam = (jam) => {
+    const arrangement = jam?.arrangement || {};
+    const restoreTracks = Array.isArray(arrangement.tracks) && arrangement.tracks.length > 0
+        ? arrangement.tracks
+        : tracks;
+
+    stopProgression();
+
+    if (Array.isArray(restoreTracks)) {
+        setTracks(restoreTracks);
+        setSelectedTrack(restoreTracks[0]?.id ?? null);
+    }
+
+    if (typeof arrangement.bpm === "number") {
+        setBpm(String(arrangement.bpm));
+    }
+
+    if (typeof arrangement.beats_per_bar === "number") {
+        setBeatsPerBar(arrangement.beats_per_bar);
+    }
+
+    if (jam?.name) {
+        setJamName(jam.name);
+    }
+};
 
 // get chords from url
 
@@ -1465,152 +1576,22 @@ const [importing, setImporting] = useState(false);
 const [importError, setImportError] = useState("");
 const [progressionIndex, setProgressionIndex] = useState(0);
 
-const parseChordRoot = (chordName = "") => {
-  const cleaned = chordName.trim();
-  if (!cleaned) return "C";
-
-  const match = cleaned.match(/^([A-G](?:#|b)?)/i);
-  if (!match) return "C";
-
-  return match[1].toUpperCase();
-};
-
-const getBassVariation = (index) => {
-  const cycle = [0, 0, 1, 0, 0, 2, 0, 1];
-  return cycle[index % cycle.length];
-};
-
-const getLeadMelodyNote = (root, index) => {
-  const rootMap = {
-    C: ["C", "E", "G", "A", "B"],
-    D: ["D", "F#", "A", "B", "C"],
-    E: ["E", "G#", "B", "C#", "D"],
-    F: ["F", "A", "C", "D", "E"],
-    G: ["G", "B", "D", "E", "F"],
-    A: ["A", "C#", "E", "G", "B"],
-    B: ["B", "D#", "F#", "G#", "A"],
-  };
-
-  const notes = rootMap[root] || rootMap.C;
-  return notes[index % notes.length];
-};
-
-const makeBandTrack = (name, instrument, volume, chords, color, preset = "default") => ({
-  id: Date.now() + Math.random(),
-  name,
-  chords: chords.map((chord, index) => {
-    const root = parseChordRoot(chord.name || "C");
-    const bassVariation = getBassVariation(index);
-    const melodyNote = getLeadMelodyNote(root, index);
-
-    const base = {
-      type: "chord",
-      name: preset === "bass" ? root : chord.name || "C",
-      octave: preset === "lead" ? 5 : 4,
-      inversion: preset === "bass" ? bassVariation : 0,
-      beats: preset === "pad" ? 2 : 1,
-      repeat: 1,
-      wait: 0,
-      speed: (preset === "bass" && bassVariation === 0)
-        ? 0.25
-        : (preset === "lead" ? 0.55 : 1),
-      instrument,
-      volume,
-      pattern: [true],
-      trackId: null,
-      melodyNote
-    };
-
-    if (preset === "lead") {
-      return {
-        ...base,
-        name: melodyNote,
-        type: "note",
-        speed: 0.8,
-        octave: 5,
-        beats: index % 3 === 0 ? 2 : 1
-      };
-    }
-
-    return base;
-  }),
-  muted: false,
-  volume,
-  instrument,
-  loop: true,
-  color
-});
-
-const generateLocalBand = (song = importedSong) => {
+const generateLocalBand = (song = importedSong, style = bandStyle) => {
   if (!song || !Array.isArray(song.chords) || song.chords.length === 0) {
-    setImportError("Import a song first to generate the band.");
+    const demoBand = buildDemoBand(style);
+    stopProgression();
+    setTracks(demoBand);
+    setSelectedTrack(demoBand[0]?.id ?? null);
+    setImportError("No valid song was imported, so a demo band was loaded instead.");
     return;
   }
 
   stopProgression();
 
-  const songChords = song.chords.map(chord => ({
-    ...chord,
-    name: chord.name || "C"
-  }));
-
-  const leadChords = songChords.map((chord, index) => ({
-    ...chord,
-    name: parseChordRoot(chord.name),
-    beats: index % 4 === 0 ? 2 : 1,
-    repeat: 1,
-    speed: index % 2 === 0 ? 0.25 : 0.55
-  }));
-
-  const bassTrack = makeBandTrack(
-    `${song.title ? song.title.split(" ")[0] : "Bass"} Bass`,
-    "finger_bass",
-    0.72,
-    songChords,
-    "#00B894",
-    "bass"
-  );
-
-  const pianoTrack = makeBandTrack(
-    "Piano",
-    "acoustic_grand_piano",
-    0.82,
-    songChords,
-    "#6D4AFF",
-    "default"
-  );
-
-  const rhythmTrack = makeBandTrack(
-    "Rhythm",
-    "church_organ",
-    0.68,
-    leadChords,
-    "#FDCB6E",
-    "default"
-  );
-
-  const fluteTrack = makeBandTrack(
-    "Flute Lead",
-    "flute",
-    0.58,
-    leadChords,
-    "#FF6B8A",
-    "lead"
-  );
-
-  const violinTrack = makeBandTrack(
-    "Violin Pad",
-    "violin",
-    0.52,
-    leadChords,
-    "#0984E3",
-    "pad"
-  );
-
-  const nextTracks = [bassTrack, pianoTrack, rhythmTrack, fluteTrack, violinTrack];
+  const nextTracks = buildBandFromSong(song, style);
 
   setTracks(nextTracks);
-  setSelectedTrack(bassTrack.id);
+  setSelectedTrack(nextTracks[0]?.id ?? null);
   setImportError("");
 };
 
@@ -1686,6 +1667,23 @@ async function importSong() {
     {/* Song Import */}
 
     <div
+      style={{
+        width: "90%",
+        maxWidth: 1000,
+        background: "rgba(109,74,255,0.06)",
+        border: `1px solid ${colors.border}`,
+        borderRadius: 16,
+        padding: "12px 16px",
+        boxSizing: "border-box",
+        color: colors.text,
+        fontWeight: 700,
+        letterSpacing: 0.3
+      }}
+    >
+      Hackathon demo: paste a song URL → generate a band → tap play
+    </div>
+
+    <div
         style={{
             display: "flex",
             alignItems: "center",
@@ -1719,9 +1717,24 @@ async function importSong() {
             {importing ? "Importing..." : "Import"}
         </Button>
 
+        <TextField
+            select
+            size="small"
+            label="Band style"
+            value={bandStyle}
+            onChange={(event) => setBandStyle(event.target.value)}
+            sx={{ minWidth: 150 }}
+        >
+            {styleOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                </MenuItem>
+            ))}
+        </TextField>
+
         <Button
             variant="outlined"
-            onClick={generateLocalBand}
+            onClick={() => generateLocalBand(importedSong, bandStyle)}
             disabled={!importedSong || !Array.isArray(importedSong.chords) || importedSong.chords.length === 0}
             sx={{
                 borderRadius: 3,
@@ -1730,6 +1743,19 @@ async function importSong() {
             }}
         >
             🤖 Generate Band
+        </Button>
+
+        <Button
+            variant="outlined"
+            onClick={loadSavedJams}
+            disabled={loadingJams}
+            sx={{
+                borderRadius: 3,
+                textTransform: "none",
+                whiteSpace: "nowrap"
+            }}
+        >
+            {loadingJams ? "Loading..." : "Load jams"}
         </Button>
 
     </div>
@@ -1904,8 +1930,26 @@ async function importSong() {
             ♩ {bpm} BPM
         </Button>
 
+        <TextField
+            size="small"
+            label="Jam name"
+            value={jamName}
+            onChange={(event) => setJamName(event.target.value)}
+            sx={{ minWidth: 180 }}
+        />
 
-
+        <Button
+            variant="contained"
+            onClick={saveCurrentJam}
+            disabled={savingJam || tracks.every(track => track.chords.length === 0)}
+            sx={{
+                backgroundColor: colors.primary,
+                borderRadius: 3,
+                textTransform: "none"
+            }}
+        >
+            {savingJam ? "Saving..." : "Save jam"}
+        </Button>
 
         <Button
 
@@ -1950,7 +1994,59 @@ async function importSong() {
 
       </div>
 
+      {savedJams.length > 0 && (
+        <div
+          style={{
+            width: "90%",
+            maxWidth: 1000,
+            background: "rgba(255,255,255,0.72)",
+            border: `1px solid ${colors.border}`,
+            borderRadius: 18,
+            padding: 18,
+            boxSizing: "border-box"
+          }}
+        >
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 800,
+              letterSpacing: 1,
+              color: colors.text,
+              textTransform: "uppercase",
+              marginBottom: 12,
+              opacity: 0.8
+            }}
+          >
+            Saved jams
+          </div>
 
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {savedJams.map((jam) => (
+              <button
+                key={jam.id || jam.name}
+                type="button"
+                onClick={() => restoreSavedJam(jam)}
+                style={{
+                  border: `1px solid ${colors.border}`,
+                  background: colors.card,
+                  color: colors.text,
+                  borderRadius: 12,
+                  padding: "8px 12px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  minWidth: 150,
+                  textAlign: "left"
+                }}
+              >
+                <div>{jam.name || "Untitled Jam"}</div>
+                <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4 }}>
+                  {jam.bpm || 120} BPM
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Chords */}
 
