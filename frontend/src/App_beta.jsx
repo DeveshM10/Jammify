@@ -57,15 +57,26 @@ import {
     unlockAudio,
     playChord,
     stopAllNotes,
-    updateTrackVolume as updateAudioTrackVolume
-
+    updateTrackVolume as updateAudioTrackVolume,
+    muteTrackAudio,
+    soloTrackAudio,
+    unsoloAllAudio,
 } from "./audio";
 
 import {
     buildBandFromSong,
     buildDemoBand,
-    styleOptions
+    styleOptions,
+    DEFAULT_AI_BAND_SELECTION,
+    aiBandInstrumentOptions,
+    arrangementPresetOptions
 } from "./aiBandEngine";
+
+import { analyzeAll, mapVoiceAnalysisToSettings } from "./voiceAnalyzer";
+import { openCamera, captureFrame, extractChords as ocrExtractChords, stopCamera } from "./cameraScanner";
+import { parseMood } from "./moodParser";
+import { queryOllama, isOllamaAvailable } from "./ollamaClient";
+import LiveJamPad from "./LiveJamPad";
 
 
 const instrumentCatalog = [
@@ -274,6 +285,91 @@ function SortableChord({
                 {chord.type === "note" ? "NOTE" : "CHORD"}
             </div>
 
+            {/* Fill indicators */}
+            {chord.isFill && (
+                <div
+                    style={{
+                        position: "absolute",
+                        bottom: 5,
+                        left: 0,
+                        right: 0,
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        gap: 3,
+                    }}
+                >
+                    {chord.fillType === "major-fill" && (
+                        <span
+                            style={{
+                                fontSize: 8,
+                                fontWeight: 900,
+                                letterSpacing: 0.5,
+                                color: active ? "rgba(255,255,255,0.9)" : "#FF6B8A",
+                                textTransform: "uppercase",
+                                lineHeight: 1,
+                            }}
+                        >
+                            FILL
+                        </span>
+                    )}
+                    {chord.fillType === "drum-roll" && (
+                        <span
+                            style={{
+                                fontSize: 8,
+                                fontWeight: 900,
+                                letterSpacing: 0.5,
+                                color: active ? "rgba(255,255,255,0.9)" : "#E17055",
+                                textTransform: "uppercase",
+                                lineHeight: 1,
+                            }}
+                        >
+                            ROLL
+                        </span>
+                    )}
+                    {chord.fillType === "bass-drop" && (
+                        <span
+                            style={{
+                                fontSize: 8,
+                                fontWeight: 900,
+                                letterSpacing: 0.5,
+                                color: active ? "rgba(255,255,255,0.9)" : "#0984E3",
+                                textTransform: "uppercase",
+                                lineHeight: 1,
+                            }}
+                        >
+                            DROP
+                        </span>
+                    )}
+                    {chord.fillType === "piano-run" && (
+                        <span
+                            style={{
+                                fontSize: 8,
+                                fontWeight: 900,
+                                letterSpacing: 0.5,
+                                color: active ? "rgba(255,255,255,0.9)" : "#6D4AFF",
+                                textTransform: "uppercase",
+                                lineHeight: 1,
+                            }}
+                        >
+                            RUN
+                        </span>
+                    )}
+                    {(chord.fillType === "build-up" || (!chord.fillType && chord.isFill)) && (
+                        /* Animated dot for build-up and generic fills */
+                        <span
+                            style={{
+                                width: 5,
+                                height: 5,
+                                borderRadius: "50%",
+                                background: active ? "rgba(255,255,255,0.85)" : "#A29BFE",
+                                display: "inline-block",
+                                animation: "fillPulse 0.7s ease-in-out infinite alternate",
+                            }}
+                        />
+                    )}
+                </div>
+            )}
 
         </div>
 
@@ -334,6 +430,35 @@ function App() {
   const [tempoDialogOpen, setTempoDialogOpen] = useState(false);
   const [beatsPerBar, setBeatsPerBar] = useState(4);
   const [bandStyle, setBandStyle] = useState("pop");
+  const [arrangementPreset, setArrangementPreset] = useState("radio");
+  const [aiBandSelection, setAiBandSelection] = useState(DEFAULT_AI_BAND_SELECTION);
+  const [aiProducerSettings, setAiProducerSettings] = useState({
+    energy: 74,
+    vocalIntensity: 68,
+    arrangementDensity: 72,
+  });
+
+  // ── Voice Analyzer state ────────────────────────────────────────────────
+  const [voiceRecording,    setVoiceRecording]    = useState(false);
+  const [voiceResult,       setVoiceResult]       = useState(null);   // VoiceAnalysisResult
+  const [voiceDuration,     setVoiceDuration]     = useState(5);
+
+  // ── Camera Scanner state ─────────────────────────────────────────────────
+  const [cameraOpen,        setCameraOpen]        = useState(false);
+  const [cameraStream,      setCameraStream]      = useState(null);
+  const [cameraScanning,    setCameraScanning]    = useState(false);
+  const [scanResult,        setScanResult]        = useState(null);  // CameraScanResult
+  const [confirmedChords,   setConfirmedChords]   = useState([]);
+  const videoRef = useRef(null);
+
+  // ── Mood Parser state ────────────────────────────────────────────────────
+  const [moodText,          setMoodText]          = useState("");
+  const [moodResult,        setMoodResult]        = useState(null);  // MoodParseResult
+  const [moodLoading,       setMoodLoading]       = useState(false);
+  const [llmEnabled,        setLlmEnabled]        = useState(false);
+
+  // ── Live Jam Pad state ───────────────────────────────────────────────────
+  const [jamPadOpen,        setJamPadOpen]        = useState(false);
   const [jamName, setJamName] = useState("My Jam");
   const [savedJams, setSavedJams] = useState([]);
   const [savingJam, setSavingJam] = useState(false);
@@ -585,18 +710,51 @@ const deleteTrack = (id) => {
 
 
 const toggleMuteTrack = (id) => {
-
-  setTracks(prevTracks =>
-    prevTracks.map(track =>
+  setTracks(prevTracks => {
+    const updated = prevTracks.map(track =>
       track.id === id
-        ? {
-            ...track,
-            muted: !track.muted
-          }
+        ? { ...track, muted: !track.muted }
         : track
-    )
-  );
+    );
 
+    // Apply audio-level gain ramp immediately.
+    const target = updated.find(t => t.id === id);
+    if (target) {
+      muteTrackAudio(id, target.muted, target.volume);
+    }
+
+    return updated;
+  });
+};
+
+const toggleSoloTrack = (id) => {
+  setTracks(prevTracks => {
+    // Determine if we're turning solo ON or OFF.
+    const current = prevTracks.find(t => t.id === id);
+    const turningOn = !current?.solo;
+
+    const updated = prevTracks.map(track => {
+      if (track.id === id) return { ...track, solo: turningOn };
+      // Clear solo on any other track when solo is activated.
+      if (turningOn) return { ...track, solo: false };
+      return track;
+    });
+
+    // Build a volume map for every track so the audio layer
+    // knows what to restore each track to.
+    const volMap = {};
+    updated.forEach(t => { volMap[t.id] = t.volume; });
+
+    if (turningOn) {
+      // Silence all other tracks at the gain level.
+      soloTrackAudio(id, volMap);
+    } else {
+      // Restore all tracks.
+      unsoloAllAudio(volMap);
+    }
+
+    return updated;
+  });
 };
 
 const toggleTrackLoop = (id) => {
@@ -1104,13 +1262,21 @@ const playAllTracks = async () => {
 
         /*
          * Get the current chord from every track.
+         * Respect solo mode: if any track is soloed, play only solos; otherwise respect mute.
          */
+        const soloTrack = tracksRef.current.find(t => t.solo);
+        const shouldShowOnly = !!soloTrack;
+
         const chordsAtStep = tracksRef.current
-            .filter(track =>
-                track.chords.length > 0 &&
-                !track.muted &&
-                !playbackStateRef.current[track.id]?.finished
-            )
+            .filter(track => {
+              if (track.chords.length === 0 || playbackStateRef.current[track.id]?.finished) {
+                return false;
+              }
+              if (shouldShowOnly) {
+                return track.solo;
+              }
+              return !track.muted;
+            })
 
             .map(track => {
 
@@ -1327,7 +1493,16 @@ const playAllTracks = async () => {
                 .map(state => state.step);
 
             if (liveSteps.length > 0) {
-                setProgressionIndex(Math.min(...liveSteps));
+                const minStep = Math.min(...liveSteps);
+                setProgressionIndex(minStep);
+
+                const firstTrack = tracksRef.current[0];
+                if (firstTrack?.sectionLabels && firstTrack.chords[minStep]) {
+                    const totalChords = firstTrack.chords.length;
+                    const chordLength = Math.ceil(totalChords / (firstTrack.sectionLabels.length || 1));
+                    const sectionIdx = Math.floor(minStep / chordLength);
+                    setCurrentSection(firstTrack.sectionLabels[sectionIdx] || null);
+                }
             }
 
             return next;
@@ -1463,6 +1638,9 @@ const stopProgression = () => {
     // Remove active chord highlighting.
     setActiveChords([]);
 
+    // Reset section display.
+    setCurrentSection(null);
+
     // Reset UI.
     setIsPlaying(false);
 };
@@ -1481,6 +1659,10 @@ const saveCurrentJam = async () => {
             beats_per_bar: Number(beatsPerBar) || 4,
             selectedTrack,
             progressionIndex,
+            bandStyle,
+            arrangementPreset,
+            aiBandSelection,
+            aiProducerSettings,
         },
         song_id: importedSong?.id ?? null,
         user_id: null,
@@ -1566,6 +1748,22 @@ const restoreSavedJam = (jam) => {
     if (jam?.name) {
         setJamName(jam.name);
     }
+
+    if (arrangement.bandStyle) {
+        setBandStyle(arrangement.bandStyle);
+    }
+
+    if (arrangement.arrangementPreset) {
+        setArrangementPreset(arrangement.arrangementPreset);
+    }
+
+    if (arrangement.aiBandSelection) {
+        setAiBandSelection(arrangement.aiBandSelection);
+    }
+
+    if (arrangement.aiProducerSettings) {
+        setAiProducerSettings(arrangement.aiProducerSettings);
+    }
 };
 
 // get chords from url
@@ -1575,10 +1773,145 @@ const [importedSong, setImportedSong] = useState(null);
 const [importing, setImporting] = useState(false);
 const [importError, setImportError] = useState("");
 const [progressionIndex, setProgressionIndex] = useState(0);
+  const [currentSection, setCurrentSection] = useState(null);
+// ── Voice Analyzer handlers ──────────────────────────────────────────────
+const handleVoiceRecord = async () => {
+  setVoiceRecording(true);
+  setVoiceResult(null);
+  try {
+    const result = await analyzeAll(voiceDuration);
+    setVoiceResult(result);
+  } catch (err) {
+    setImportError(err.message || "Microphone analysis failed.");
+  } finally {
+    setVoiceRecording(false);
+  }
+};
+
+const applyVoiceResult = () => {
+  if (!voiceResult) return;
+  const settings = mapVoiceAnalysisToSettings(voiceResult);
+  setBandStyle(settings.bandStyle);
+  setArrangementPreset(settings.arrangementPreset);
+  setAiProducerSettings(settings.producerSettings);
+  if (settings.bpm) setBpm(settings.bpm);
+  setVoiceResult(null);
+  generateLocalBand(importedSong, settings.bandStyle);
+};
+
+// ── Camera Scanner handlers ──────────────────────────────────────────────
+const handleOpenCamera = async () => {
+  setScanResult(null);
+  setConfirmedChords([]);
+  try {
+    const stream = await openCamera();
+    setCameraStream(stream);
+    setCameraOpen(true);
+    // Attach stream to video element after the next render
+    setTimeout(() => {
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    }, 100);
+  } catch (err) {
+    setImportError(err.message || "Camera permission denied.");
+  }
+};
+
+const handleCaptureFrame = async () => {
+  if (!videoRef.current || !cameraStream) return;
+  setCameraScanning(true);
+  try {
+    const imageData = captureFrame(videoRef.current);
+    const result    = await ocrExtractChords(imageData);
+    setScanResult(result);
+    // Pre-confirm high-confidence chords
+    setConfirmedChords([...result.chords]);
+  } catch (err) {
+    setImportError("OCR failed: " + (err.message || "unknown error"));
+  } finally {
+    setCameraScanning(false);
+  }
+};
+
+const handleImportScannedChords = () => {
+  if (confirmedChords.length === 0) return;
+  const fakeSong = {
+    title:  "Camera Scan",
+    chords: confirmedChords.map((name) => ({ name, beats: 1 })),
+  };
+  setImportedSong(fakeSong);
+  generateLocalBand(fakeSong);
+  handleCloseCamera();
+};
+
+const handleCloseCamera = () => {
+  stopCamera(cameraStream);
+  setCameraStream(null);
+  setCameraOpen(false);
+  setScanResult(null);
+};
+
+// ── Mood Parser handlers ─────────────────────────────────────────────────
+const handleParseMood = async () => {
+  if (!moodText.trim()) return;
+  setMoodLoading(true);
+  setMoodResult(null);
+  try {
+    let result = null;
+    if (llmEnabled) {
+      const available = await isOllamaAvailable();
+      if (available) {
+        const llmConfig = await queryOllama(moodText);
+        if (llmConfig) {
+          result = {
+            config:            llmConfig,
+            interpretationText: `Interpreted as: ${llmConfig.style}, ${llmConfig.arrangementPreset} preset, BPM ${llmConfig.bpm}, energy ${llmConfig.energy} (AI)`,
+            confidence:        1,
+            source:            "llm",
+            matchedKeywords:   [],
+          };
+        }
+      }
+    }
+    if (!result) {
+      result = parseMood(moodText, {
+        style:              bandStyle,
+        arrangementPreset,
+        energy:             aiProducerSettings.energy,
+        vocalIntensity:     aiProducerSettings.vocalIntensity,
+        arrangementDensity: aiProducerSettings.arrangementDensity,
+        bpm:                Number(bpm),
+      });
+    }
+    setMoodResult(result);
+    // Apply config
+    setBandStyle(result.config.style);
+    setArrangementPreset(result.config.arrangementPreset);
+    setAiProducerSettings({
+      energy:             result.config.energy,
+      vocalIntensity:     result.config.vocalIntensity,
+      arrangementDensity: result.config.arrangementDensity,
+    });
+    if (result.config.bpm) setBpm(String(result.config.bpm));
+  } catch (err) {
+    setImportError("Mood parsing failed: " + (err.message || ""));
+  } finally {
+    setMoodLoading(false);
+  }
+};
+
+// ── Live Jam Pad handler ─────────────────────────────────────────────────
+const handleJamRecordComplete = (newTrack) => {
+  setTracks((prev) => [...prev, newTrack]);
+  setSelectedTrack(newTrack.id);
+  setJamPadOpen(false);
+};
 
 const generateLocalBand = (song = importedSong, style = bandStyle) => {
   if (!song || !Array.isArray(song.chords) || song.chords.length === 0) {
-    const demoBand = buildDemoBand(style);
+    const demoBand = buildDemoBand(style, aiBandSelection, aiProducerSettings, arrangementPreset);
     stopProgression();
     setTracks(demoBand);
     setSelectedTrack(demoBand[0]?.id ?? null);
@@ -1588,7 +1921,7 @@ const generateLocalBand = (song = importedSong, style = bandStyle) => {
 
   stopProgression();
 
-  const nextTracks = buildBandFromSong(song, style);
+  const nextTracks = buildBandFromSong(song, style, aiBandSelection, aiProducerSettings, arrangementPreset);
 
   setTracks(nextTracks);
   setSelectedTrack(nextTracks[0]?.id ?? null);
@@ -1732,6 +2065,121 @@ async function importSong() {
             ))}
         </TextField>
 
+        <div
+            style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                alignItems: "center",
+                background: "rgba(255,255,255,0.35)",
+                border: `1px solid ${colors.border}`,
+                borderRadius: 12,
+                padding: "8px 10px",
+                maxWidth: 520,
+            }}
+        >
+            {arrangementPresetOptions.map((option) => (
+                <Button
+                    key={option.value}
+                    variant={arrangementPreset === option.value ? "contained" : "outlined"}
+                    size="small"
+                    onClick={() => setArrangementPreset(option.value)}
+                    sx={{
+                        borderRadius: 999,
+                        minWidth: 0,
+                        px: 1.5,
+                        py: 0.6,
+                        textTransform: "none",
+                        fontSize: 12,
+                        backgroundColor: arrangementPreset === option.value ? colors.primary : "transparent",
+                        borderColor: colors.border,
+                        color: arrangementPreset === option.value ? "white" : colors.text,
+                        whiteSpace: "nowrap",
+                    }}
+                >
+                    {option.label}
+                </Button>
+            ))}
+        </div>
+
+        <div
+            style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                alignItems: "center",
+                background: "rgba(255,255,255,0.35)",
+                border: `1px solid ${colors.border}`,
+                borderRadius: 12,
+                padding: "8px 10px",
+                maxWidth: 520,
+            }}
+        >
+            {aiBandInstrumentOptions.map((option) => {
+                const active = !!aiBandSelection[option.key];
+                return (
+                    <Button
+                        key={option.key}
+                        variant={active ? "contained" : "outlined"}
+                        onClick={() => setAiBandSelection(prev => ({ ...prev, [option.key]: !prev[option.key] }))}
+                        size="small"
+                        sx={{
+                            borderRadius: 999,
+                            minWidth: 0,
+                            px: 1.5,
+                            py: 0.6,
+                            textTransform: "none",
+                            fontSize: 12,
+                            backgroundColor: active ? colors.primary : "transparent",
+                            borderColor: colors.border,
+                            color: active ? "white" : colors.text,
+                            whiteSpace: "nowrap",
+                        }}
+                    >
+                        {option.label}
+                    </Button>
+                );
+            })}
+        </div>
+
+        <div
+            style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 18,
+                background: "rgba(16, 24, 40, 0.64)",
+                border: `1px solid ${colors.border}`,
+                borderRadius: 12,
+                padding: "10px 12px",
+                minWidth: 420,
+                flexWrap: "wrap",
+            }}
+        >
+            {[
+                { key: "energy", label: "Energy", value: aiProducerSettings.energy },
+                { key: "vocalIntensity", label: "Vocal", value: aiProducerSettings.vocalIntensity },
+                { key: "arrangementDensity", label: "Density", value: aiProducerSettings.arrangementDensity },
+            ].map((control) => (
+                <div key={control.key} style={{ minWidth: 120, flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "white", marginBottom: 4 }}>
+                        <span>{control.label}</span>
+                        <span>{control.value}</span>
+                    </div>
+                    <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={control.value}
+                        onChange={(event) => setAiProducerSettings(prev => ({
+                            ...prev,
+                            [control.key]: Number(event.target.value),
+                        }))}
+                        style={{ width: "100%" }}
+                    />
+                </div>
+            ))}
+        </div>
+
         <Button
             variant="outlined"
             onClick={() => generateLocalBand(importedSong, bandStyle)}
@@ -1747,18 +2195,277 @@ async function importSong() {
 
         <Button
             variant="outlined"
-            onClick={loadSavedJams}
-            disabled={loadingJams}
+            onClick={() => {
+                const fresh = buildDemoBand(bandStyle, aiBandSelection, aiProducerSettings, arrangementPreset);
+                stopProgression();
+                setTracks(fresh);
+                setSelectedTrack(fresh[0]?.id ?? null);
+                setImportError("Demo arrangement refreshed with the chosen production preset.");
+            }}
             sx={{
                 borderRadius: 3,
                 textTransform: "none",
                 whiteSpace: "nowrap"
             }}
         >
-            {loadingJams ? "Loading..." : "Load jams"}
+            🎛 Refresh Demo
         </Button>
 
     </div>
+
+    {/* ── AI Feature Toolbar ─────────────────────────────────────────── */}
+    <div
+        style={{
+            display:    "flex",
+            flexWrap:   "wrap",
+            gap:        10,
+            width:      "90%",
+            maxWidth:   800,
+            alignItems: "center",
+            padding:    "10px 14px",
+            background: "rgba(109,74,255,0.07)",
+            border:     `1px solid ${colors.border}`,
+            borderRadius: 14,
+        }}
+    >
+        {/* Voice Input */}
+        <Button
+            variant={voiceRecording ? "contained" : "outlined"}
+            size="small"
+            onClick={handleVoiceRecord}
+            disabled={voiceRecording}
+            sx={{ borderRadius: 999, textTransform: "none", fontSize: 12,
+                  backgroundColor: voiceRecording ? colors.danger : "transparent",
+                  borderColor: colors.border, color: voiceRecording ? "white" : colors.text }}
+        >
+            {voiceRecording ? `🎙️ Listening (${voiceDuration}s)…` : "🎙️ Hum to Generate"}
+        </Button>
+
+        {/* Camera Scan */}
+        <Button
+            variant="outlined"
+            size="small"
+            onClick={handleOpenCamera}
+            sx={{ borderRadius: 999, textTransform: "none", fontSize: 12,
+                  borderColor: colors.border, color: colors.text }}
+        >
+            📷 Scan Chords
+        </Button>
+
+        {/* Mood Input */}
+        <input
+            type="text"
+            placeholder="Describe a vibe… e.g. rainy jazz café"
+            value={moodText}
+            onChange={(e) => setMoodText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleParseMood()}
+            style={{
+                flex:         1,
+                minWidth:     160,
+                padding:      "6px 10px",
+                borderRadius: 999,
+                border:       `1px solid ${colors.border}`,
+                fontSize:     12,
+                outline:      "none",
+                background:   "white",
+                color:        colors.text,
+            }}
+        />
+        <Button
+            variant="outlined"
+            size="small"
+            onClick={handleParseMood}
+            disabled={moodLoading || !moodText.trim()}
+            sx={{ borderRadius: 999, textTransform: "none", fontSize: 12,
+                  borderColor: colors.border, color: colors.text }}
+        >
+            {moodLoading ? "…" : "🎨 Vibe"}
+        </Button>
+
+        {/* LLM toggle */}
+        <Button
+            variant={llmEnabled ? "contained" : "outlined"}
+            size="small"
+            onClick={() => setLlmEnabled((v) => !v)}
+            sx={{ borderRadius: 999, textTransform: "none", fontSize: 11,
+                  backgroundColor: llmEnabled ? "#6D4AFF" : "transparent",
+                  borderColor: colors.border,
+                  color: llmEnabled ? "white" : colors.text }}
+        >
+            {llmEnabled ? "🤖 AI On" : "🤖 AI Off"}
+        </Button>
+
+        {/* Live Jam */}
+        <Button
+            variant="contained"
+            size="small"
+            onClick={() => setJamPadOpen(true)}
+            sx={{ borderRadius: 999, textTransform: "none", fontSize: 12,
+                  backgroundColor: "#FF6B8A" }}
+        >
+            🎹 Live Jam
+        </Button>
+    </div>
+
+    {/* Voice result chip */}
+    {voiceResult && (
+        <div style={{
+            width: "90%", maxWidth: 800,
+            padding: "10px 16px", borderRadius: 12,
+            background: "rgba(109,74,255,0.1)",
+            border: `1px solid ${colors.primary}`,
+            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap"
+        }}>
+            <span style={{ fontSize: 13, color: colors.primary, fontWeight: 700, flex: 1 }}>
+                🎙️ {voiceResult.bpm ? `${voiceResult.bpm} BPM` : "?"} ·{" "}
+                Key: {voiceResult.detectedKey || "unknown"} ·{" "}
+                Energy: {Math.round(voiceResult.energy * 100)}% →{" "}
+                <strong>{voiceResult.suggestedStyle}</strong>
+            </span>
+            <Button size="small" variant="contained"
+                onClick={applyVoiceResult}
+                sx={{ borderRadius: 999, textTransform: "none", fontSize: 11,
+                      backgroundColor: colors.primary }}>
+                Apply &amp; Generate
+            </Button>
+            <Button size="small" variant="text"
+                onClick={() => setVoiceResult(null)}
+                sx={{ textTransform: "none", fontSize: 11, color: colors.text }}>
+                Dismiss
+            </Button>
+        </div>
+    )}
+
+    {/* Mood result chip */}
+    {moodResult && (
+        <div style={{
+            width: "90%", maxWidth: 800,
+            padding: "10px 16px", borderRadius: 12,
+            background: moodResult.source === "llm" ? "rgba(0,184,148,0.1)" : "rgba(109,74,255,0.08)",
+            border: `1px solid ${moodResult.source === "llm" ? "#00B894" : colors.border}`,
+            fontSize: 13, color: colors.text, fontWeight: 600,
+        }}>
+            ✨ {moodResult.interpretationText}
+        </div>
+    )}
+
+    {/* Camera Scanner Modal */}
+    {cameraOpen && (
+        <div style={{
+            position: "fixed", inset: 0, zIndex: 900,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", gap: 12,
+            padding: 20,
+        }}>
+            <div style={{ color: "white", fontSize: 18, fontWeight: 800 }}>
+                📷 Point at a chord chart
+            </div>
+
+            {/* Live video preview */}
+            {!scanResult && (
+                <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{
+                        width: "100%", maxWidth: 480,
+                        borderRadius: 12,
+                        border: "2px solid rgba(255,255,255,0.3)",
+                    }}
+                />
+            )}
+
+            {/* Scan result */}
+            {scanResult && (
+                <div style={{
+                    background: "white", borderRadius: 14,
+                    padding: 16, width: "100%", maxWidth: 480,
+                }}>
+                    <div style={{ fontWeight: 800, color: colors.text, marginBottom: 8 }}>
+                        {scanResult.chords.length + scanResult.lowConfidence.length === 0
+                            ? "No chords detected. Try again or type them manually."
+                            : `Found ${scanResult.chords.length} chord${scanResult.chords.length !== 1 ? "s" : ""}:`
+                        }
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                        {scanResult.chords.map((c) => (
+                            <button key={c}
+                                onClick={() => setConfirmedChords((prev) =>
+                                    prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
+                                )}
+                                style={{
+                                    padding: "5px 12px", borderRadius: 999,
+                                    border: `2px solid ${confirmedChords.includes(c) ? colors.primary : colors.border}`,
+                                    background: confirmedChords.includes(c) ? `${colors.primary}22` : "white",
+                                    fontWeight: 700, cursor: "pointer", fontSize: 14,
+                                    color: colors.text,
+                                }}
+                            >{c}</button>
+                        ))}
+                        {scanResult.lowConfidence.map((c) => (
+                            <button key={`lc-${c}`}
+                                onClick={() => setConfirmedChords((prev) =>
+                                    prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]
+                                )}
+                                style={{
+                                    padding: "5px 12px", borderRadius: 999,
+                                    border: `2px solid ${confirmedChords.includes(c) ? "#FDCB6E" : "#eee"}`,
+                                    background: confirmedChords.includes(c) ? "#FDCB6E22" : "#fafafa",
+                                    fontWeight: 600, cursor: "pointer", fontSize: 13,
+                                    color: "#888", opacity: 0.85,
+                                }}
+                            >{c} ⚠️</button>
+                        ))}
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                        <Button variant="contained" size="small"
+                            disabled={confirmedChords.length === 0}
+                            onClick={handleImportScannedChords}
+                            sx={{ borderRadius: 999, textTransform: "none",
+                                  backgroundColor: colors.primary }}>
+                            Import {confirmedChords.length} Chord{confirmedChords.length !== 1 ? "s" : ""}
+                        </Button>
+                        <Button variant="outlined" size="small"
+                            onClick={() => { setScanResult(null); setConfirmedChords([]); }}
+                            sx={{ borderRadius: 999, textTransform: "none" }}>
+                            Retry
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10 }}>
+                {!scanResult && (
+                    <Button variant="contained" onClick={handleCaptureFrame}
+                        disabled={cameraScanning}
+                        sx={{ borderRadius: 999, textTransform: "none",
+                              backgroundColor: colors.primary }}>
+                        {cameraScanning ? "Scanning…" : "📸 Capture"}
+                    </Button>
+                )}
+                <Button variant="outlined" onClick={handleCloseCamera}
+                    sx={{ borderRadius: 999, textTransform: "none",
+                          borderColor: "rgba(255,255,255,0.4)", color: "white" }}>
+                    Cancel
+                </Button>
+            </div>
+        </div>
+    )}
+
+    {/* Live Jam Pad */}
+    {jamPadOpen && (
+        <LiveJamPad
+            tonic={voiceResult?.detectedKey || "C"}
+            style={bandStyle}
+            producerSettings={aiProducerSettings}
+            arrangementPreset={arrangementPreset}
+            bpm={Number(bpm) || 120}
+            onRecordComplete={handleJamRecordComplete}
+            onClose={() => setJamPadOpen(false)}
+        />
+    )}
 
     {importError && (
         <div
@@ -1994,6 +2701,38 @@ async function importSong() {
 
       </div>
 
+      {isPlaying && currentSection && (
+        <div
+            style={{
+                width: "90%",
+                maxWidth: 800,
+                padding: "16px 20px",
+                borderRadius: 12,
+                background: currentSection === "Chorus"
+                    ? "rgba(109,74,255,0.22)"
+                    : currentSection === "Bridge"
+                        ? "rgba(255,107,138,0.16)"
+                        : "rgba(109,74,255,0.12)",
+                border: `1px solid ${
+                    currentSection === "Chorus"
+                        ? colors.primary
+                        : currentSection === "Bridge"
+                            ? colors.danger
+                            : colors.primary
+                }`,
+                color: currentSection === "Bridge" ? colors.danger : colors.primary,
+                textAlign: "center",
+                fontSize: 16,
+                fontWeight: 800,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+                transition: "background 0.4s ease, border-color 0.4s ease, color 0.4s ease",
+            }}
+        >
+            Now playing: {currentSection}
+        </div>
+      )}
+
       {savedJams.length > 0 && (
         <div
           style={{
@@ -2189,6 +2928,29 @@ async function importSong() {
             />
         </div>
 
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 92 }}>
+            {Array.isArray(track.sectionLabels) && track.sectionLabels.length > 0 && (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", maxWidth: 120 }}>
+                    {track.sectionLabels.map((section) => (
+                        <span key={`${track.id}-${section}`} style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "3px 7px",
+                            borderRadius: 999,
+                            background: section === "Chorus" ? "rgba(109,74,255,0.16)" : "rgba(16,24,40,0.06)",
+                            color: section === "Chorus" ? colors.primary : colors.text,
+                            fontSize: 10,
+                            fontWeight: 800,
+                            letterSpacing: 0.4,
+                            textTransform: "uppercase",
+                        }}>
+                            {section}
+                        </span>
+                    ))}
+                </div>
+            )}
+        </div>
 
     <div
         style={{
@@ -2215,6 +2977,23 @@ async function importSong() {
             }}
         >
             {track.muted ? "🔇" : "🔊"}
+        </Button>
+
+        <Button
+            size="small"
+            variant={track.solo ? "contained" : "outlined"}
+            sx={{
+                minWidth: 50,
+                backgroundColor: track.solo ? "#FF6B8A" : "transparent",
+                borderColor: track.solo ? "#FF6B8A" : colors.border,
+                color: track.solo ? "white" : colors.text,
+            }}
+            onClick={(e) => {
+                e.stopPropagation();
+                toggleSoloTrack(track.id);
+            }}
+        >
+            {track.solo ? "Solo" : "Solo"}
         </Button>
 
 

@@ -633,6 +633,124 @@ export function stopAllNotes() {
 
 
 /*
+ * playJamChord — for Live Jam Mode.
+ *
+ * Plays a single chord immediately across a dedicated "jam" sampler.
+ * Uses Tone.now() for minimal latency. Stops the previous jam chord first.
+ *
+ * Unlike playChord(), this doesn't need a trackId — it uses a single
+ * shared "jam" gain/sampler pair so taps feel instant.
+ */
+const JAM_TRACK_ID = "__jam__";
+
+export async function playJamChord(midiNotes, durationBeats = 2, bpm = 120, volume = 0.85, instrument = "acoustic_grand_piano") {
+  if (!midiNotes || midiNotes.length === 0) return;
+
+  // Stop previous jam notes immediately
+  stopTrackNotes(JAM_TRACK_ID);
+
+  const sampler = await loadInstrumentForTrack(JAM_TRACK_ID, instrument);
+  const gain    = getTrackGain(JAM_TRACK_ID, volume);
+
+  if (sampler.output && !sampler.__connectedToTrack) {
+    sampler.connect(gain);
+    sampler.__connectedToTrack = true;
+  }
+
+  gain.gain.rampTo(Number(volume), 0.01);
+
+  const duration  = (60 / bpm) * durationBeats;
+  const noteNames = midiNotes.map(midi => Tone.Frequency(midi, "midi").toNote());
+
+  // Schedule immediately for lowest latency
+  sampler.triggerAttackRelease(noteNames, duration, Tone.now());
+
+  activeVoices.push({ trackId: JAM_TRACK_ID, sampler });
+}
+
+
+/*
+ * Mute or unmute one track at the audio level.
+ *
+ * When muted  → ramp gain to 0 over 40ms so any
+ *               sustaining notes fade immediately.
+ * When unmuted → ramp back to the track's saved
+ *               volume.
+ */
+export function muteTrackAudio(trackId, muted, volume = 0.8) {
+
+    const gain = trackGains[trackId];
+
+    if (!gain) {
+        return;
+    }
+
+    if (muted) {
+        gain.gain.rampTo(0, 0.04);
+    } else {
+        gain.gain.rampTo(Number(volume), 0.04);
+    }
+}
+
+
+/*
+ * Solo one track at the audio level.
+ *
+ * Ramps all OTHER known tracks to 0 instantly,
+ * and restores the soloed track's volume.
+ *
+ * trackVolumes is a map of { trackId → volume }
+ * passed in from React state so we know what to
+ * restore each track to.
+ */
+export function soloTrackAudio(soloedId, trackVolumes = {}) {
+
+    Object.keys(trackGains).forEach(id => {
+
+        const numId = Number(id);
+        const gain  = trackGains[numId];
+
+        if (!gain) return;
+
+        if (numId === soloedId) {
+            // Restore the soloed track.
+            gain.gain.rampTo(
+                Number(trackVolumes[numId] ?? 0.8),
+                0.04
+            );
+        } else {
+            // Silence every other track.
+            gain.gain.rampTo(0, 0.04);
+        }
+
+    });
+}
+
+
+/*
+ * Un-solo — restore every track to its saved volume.
+ *
+ * Called when solo is toggled off.
+ */
+export function unsoloAllAudio(trackVolumes = {}) {
+
+    Object.keys(trackGains).forEach(id => {
+
+        const numId = Number(id);
+        const gain  = trackGains[numId];
+
+        if (!gain) return;
+
+        gain.gain.rampTo(
+            Number(trackVolumes[numId] ?? 0.8),
+            0.04
+        );
+
+    });
+}
+
+
+/*
  * Remove all audio resources
  * belonging to one deleted track.
  */

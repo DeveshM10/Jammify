@@ -18,6 +18,7 @@
     "@mui/material": "^9.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "tesseract.js": "^5.1.1",
     "tonal": "^6.4.3",
     "tone": "^15.1.22"
   },
