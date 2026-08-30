@@ -237,9 +237,11 @@ export function analyzePitch(samples, sampleRate) {
 
   const nsdfResults = computeNSDF(samples, lagMin, lagMax);
 
-  // Find first local maximum above 0.8 clarity threshold
-  // (McLeod uses 0.8 as the clarity threshold)
-  const CLARITY_THRESHOLD = 0.8;
+  // NSDF clarity threshold for mic/voice input.
+  // McLeod's original paper uses 0.8 for clean instrument recordings.
+  // For browser mic + human voice, 0.55 is the practical threshold —
+  // anything lower causes too many false positives from breath/noise.
+  const CLARITY_THRESHOLD = 0.55;
   let bestLag     = null;
   let bestClarity = 0;
 
@@ -289,7 +291,8 @@ export function mapVoiceAnalysisToSettings({ energy, bpm, pitchClass }) {
       vocalIntensity:      Math.round(40 + energy * 40),
       arrangementDensity:  bucket.density,
     },
-    bpm: bpm ? String(Math.round(bpm)) : null,
+    // bpm kept as number internally; callers convert to string for the BPM input field
+    bpm:        bpm ? Math.round(bpm) : null,
     detectedKey: pitchClass,
   };
 }

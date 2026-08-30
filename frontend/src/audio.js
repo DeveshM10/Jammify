@@ -536,9 +536,22 @@ export async function playChord(
 
 
     /*
-     * Keep track of this sampler
-     * for emergency stopping.
+     * Keep track of this sampler for emergency stopping.
+     *
+     * MEMORY LEAK FIX: prune entries whose sampler has been disposed
+     * (trackSamplers[id] no longer references them) before pushing,
+     * so the array never grows unboundedly over a long session.
      */
+    const activeSamplers = new Set(
+        Object.values(trackSamplers).map(s => s.sampler)
+    );
+    activeVoices = activeVoices.filter(v => activeSamplers.has(v.sampler));
+
+    // Cap to 200 entries as an absolute safety net
+    if (activeVoices.length > 200) {
+        activeVoices = activeVoices.slice(-100);
+    }
+
     activeVoices.push({
         trackId,
         sampler
@@ -707,19 +720,17 @@ export function soloTrackAudio(soloedId, trackVolumes = {}) {
 
     Object.keys(trackGains).forEach(id => {
 
+        // Skip the special jam track — it should not be affected by solo
+        if (id === "__jam__") return;
+
         const numId = Number(id);
-        const gain  = trackGains[numId];
+        const gain  = trackGains[id]; // use string key directly
 
         if (!gain) return;
 
         if (numId === soloedId) {
-            // Restore the soloed track.
-            gain.gain.rampTo(
-                Number(trackVolumes[numId] ?? 0.8),
-                0.04
-            );
+            gain.gain.rampTo(Number(trackVolumes[numId] ?? 0.8), 0.04);
         } else {
-            // Silence every other track.
             gain.gain.rampTo(0, 0.04);
         }
 
@@ -736,15 +747,15 @@ export function unsoloAllAudio(trackVolumes = {}) {
 
     Object.keys(trackGains).forEach(id => {
 
+        // Skip the special jam track
+        if (id === "__jam__") return;
+
         const numId = Number(id);
-        const gain  = trackGains[numId];
+        const gain  = trackGains[id]; // use string key directly
 
         if (!gain) return;
 
-        gain.gain.rampTo(
-            Number(trackVolumes[numId] ?? 0.8),
-            0.04
-        );
+        gain.gain.rampTo(Number(trackVolumes[numId] ?? 0.8), 0.04);
 
     });
 }

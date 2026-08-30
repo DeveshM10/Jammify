@@ -1,18 +1,30 @@
 import { analyzeProgression, chooseStyleFromAnalysis } from "./musicTheory.js";
 
+// ─── Scale note lookup (used for fallback melody/bass notes) ─────────────────
+// Keys are sharp-normalised pitch classes (A#, not Bb).
+// Flat keys (Bb, Eb, Ab, Db, Gb) are mapped to their enharmonic sharp equivalents
+// so every key has an entry here.
 const rootMap = {
-  C: ["C", "E", "G", "A", "B"],
-  D: ["D", "F#", "A", "C", "E"],
-  E: ["E", "G#", "B", "C#", "D"],
-  F: ["F", "A", "C", "D", "E"],
-  G: ["G", "B", "D", "E", "F"],
-  A: ["A", "C#", "E", "G", "B"],
-  B: ["B", "D#", "F#", "G#", "A"],
-  "C#": ["C#", "E#", "G#", "A#", "B#"],
-  "D#": ["D#", "F#", "A#", "C", "D"],
-  "F#": ["F#", "A#", "C#", "D#", "E#"],
-  "G#": ["G#", "B#", "D#", "E#", "F#"],
-  "A#": ["A#", "C#", "E#", "G#", "B#"],
+  C:  ["C",  "E",  "G",  "A",  "B"],
+  D:  ["D",  "F#", "A",  "C",  "E"],
+  E:  ["E",  "G#", "B",  "C#", "D"],
+  F:  ["F",  "A",  "C",  "D",  "E"],
+  G:  ["G",  "B",  "D",  "E",  "F"],
+  A:  ["A",  "C#", "E",  "G",  "B"],
+  B:  ["B",  "D#", "F#", "G#", "A"],
+  // Sharps
+  "C#": ["C#", "F",  "G#", "A#", "C"],
+  "D#": ["D#", "G",  "A#", "C",  "D"],
+  "F#": ["F#", "A#", "C#", "D#", "F"],
+  "G#": ["G#", "C",  "D#", "F",  "G"],
+  "A#": ["A#", "D",  "F",  "G",  "A"],
+  // Flat enharmonics → mapped to sharp equivalents above via normalizeRoot
+  // Included here as aliases so any missed normalisation still resolves
+  Bb:   ["A#", "D",  "F",  "G",  "A"],
+  Eb:   ["D#", "G",  "A#", "C",  "D"],
+  Ab:   ["G#", "C",  "D#", "F",  "G"],
+  Db:   ["C#", "F",  "G#", "A#", "C"],
+  Gb:   ["F#", "A#", "C#", "D#", "F"],
 };
 
 function parseChordRoot(chordName = "") {
@@ -27,8 +39,13 @@ function normalizeRoot(root) {
   const normalized = String(root || "C").trim();
   if (!normalized) return "C";
   const direct = normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
-  const fixed = direct === "Bb" ? "B" : direct === "Db" ? "D" : direct === "Eb" ? "E" : direct === "Gb" ? "G" : direct === "Ab" ? "A" : direct;
-  return fixed;
+  // Map flat spellings to their enharmonic sharp equivalents.
+  // Previous version mapped Bb→B (WRONG — a completely different pitch).
+  // Correct mappings: Bb=A#, Eb=D#, Ab=G#, Db=C#, Gb=F#
+  const flatToSharp = {
+    Bb: "A#", Eb: "D#", Ab: "G#", Db: "C#", Gb: "F#",
+  };
+  return flatToSharp[direct] || direct;
 }
 
 function getBassVariation(index) {

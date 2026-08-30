@@ -68,6 +68,31 @@ export const MOOD_VOCABULARY = {
   driving:     { style: "rock",      arrangementPreset: "live-band",energy: 85, vocalIntensity: 78, arrangementDensity: 82, bpm: 142 },
   fast:        { style: "rock",      arrangementPreset: "live-band",energy: 88, vocalIntensity: 80, arrangementDensity: 85, bpm: 155 },
 
+  // ── Rock / Metal / Punk ─────────────────────────────────────────────────
+  rock:        { style: "rock",      arrangementPreset: "live-band",energy: 85, vocalIntensity: 80, arrangementDensity: 82, bpm: 140 },
+  metal:       { style: "rock",      arrangementPreset: "epic",     energy: 98, vocalIntensity: 78, arrangementDensity: 95, bpm: 170 },
+  punk:        { style: "rock",      arrangementPreset: "live-band",energy: 96, vocalIntensity: 85, arrangementDensity: 90, bpm: 165 },
+  grunge:      { style: "rock",      arrangementPreset: "live-band",energy: 82, vocalIntensity: 72, arrangementDensity: 78, bpm: 130 },
+  hardcore:    { style: "rock",      arrangementPreset: "epic",     energy: 98, vocalIntensity: 80, arrangementDensity: 96, bpm: 175 },
+
+  // ── Funk / Soul / R&B ───────────────────────────────────────────────────
+  funk:        { style: "jazz",      arrangementPreset: "live-band",energy: 78, vocalIntensity: 76, arrangementDensity: 80, bpm: 110 },
+  soul:        { style: "jazz",      arrangementPreset: "radio",    energy: 62, vocalIntensity: 80, arrangementDensity: 62, bpm: 98  },
+  rnb:         { style: "pop",       arrangementPreset: "radio",    energy: 65, vocalIntensity: 82, arrangementDensity: 65, bpm: 94  },
+  groove:      { style: "jazz",      arrangementPreset: "live-band",energy: 75, vocalIntensity: 72, arrangementDensity: 75, bpm: 108 },
+  smooth:      { style: "jazz",      arrangementPreset: "radio",    energy: 48, vocalIntensity: 60, arrangementDensity: 50, bpm: 90  },
+
+  // ── Blues ───────────────────────────────────────────────────────────────
+  blues:       { style: "jazz",      arrangementPreset: "radio",    energy: 52, vocalIntensity: 68, arrangementDensity: 52, bpm: 88  },
+  slowblues:   { style: "jazz",      arrangementPreset: "lofi",     energy: 35, vocalIntensity: 62, arrangementDensity: 38, bpm: 68  },
+
+  // ── Electronic / EDM ────────────────────────────────────────────────────
+  electronic:  { style: "pop",       arrangementPreset: "live-band",energy: 88, vocalIntensity: 65, arrangementDensity: 88, bpm: 128 },
+  edm:         { style: "pop",       arrangementPreset: "live-band",energy: 92, vocalIntensity: 60, arrangementDensity: 92, bpm: 138 },
+  techno:      { style: "pop",       arrangementPreset: "epic",     energy: 90, vocalIntensity: 45, arrangementDensity: 90, bpm: 135 },
+  synth:       { style: "pop",       arrangementPreset: "live-band",energy: 80, vocalIntensity: 65, arrangementDensity: 82, bpm: 122 },
+  hyperpop:    { style: "pop",       arrangementPreset: "epic",     energy: 95, vocalIntensity: 88, arrangementDensity: 94, bpm: 155 },
+
   // ── Mysterious / Dark ───────────────────────────────────────────────────
   dark:        { style: "cinematic", arrangementPreset: "cinematic",energy: 58, vocalIntensity: 38, arrangementDensity: 65, bpm: 98  },
   mysterious:  { style: "cinematic", arrangementPreset: "cinematic",energy: 48, vocalIntensity: 40, arrangementDensity: 55, bpm: 90  },
@@ -148,28 +173,54 @@ function mode(values) {
  * @returns {MoodParseResult}
  */
 export function parseMood(text = "", currentConfig = {}) {
-  const tokens  = String(text).toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
+  const rawTokens = String(text).toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
+
+  // Synonym expansion: map common variants to vocabulary keys
+  const SYNONYMS = {
+    relaxed: "chill", relax: "chill", chilling: "chill",
+    melancholic: "melancholy", depressed: "sad", gloomy: "sad",
+    excited: "hype", exciting: "energetic", pumped: "hype",
+    spooky: "haunting", eerie: "mysterious", creepy: "haunting",
+    epic: "epic", majestic: "triumphant", grand: "epic",
+    cozy: "chill", comfy: "chill", comfortable: "calm",
+    groovy: "groove", funky: "funk", soulful: "soul",
+    electric: "electronic", digital: "electronic",
+    sleepy: "sleep", sleepy: "sleep", drowsy: "sleep",
+    horror: "haunting", thriller: "tense",
+    love: "romantic", lovers: "romantic",
+    hopeful: "uplifting", hope: "uplifting",
+    raw: "acoustic", stripped: "acoustic", unplugged: "acoustic",
+    heavy: "metal", loud: "rock", distorted: "rock",
+    vibes: "chill", vibe: "chill",
+    slow: "calm", slower: "calm",
+    summer: "happy", sunny: "happy", sunshine: "happy",
+    winter: "melancholy", cold: "sad", rain: "rainy",
+  };
+
+  const tokens = rawTokens.map(t => SYNONYMS[t] || t);
   const matched = [];
+  const seenKeywords = new Set();
 
   for (const token of tokens) {
-    if (MOOD_VOCABULARY[token]) {
+    if (MOOD_VOCABULARY[token] && !seenKeywords.has(token)) {
       matched.push({ keyword: token, config: MOOD_VOCABULARY[token] });
+      seenKeywords.add(token);
     }
   }
 
   if (matched.length === 0) {
     return {
-      config:            currentConfig,
-      interpretationText: `"${text}" — no matching mood keywords found`,
-      confidence:        0,
-      source:            "local",
-      matchedKeywords:   [],
+      config:             currentConfig,
+      interpretationText: `"${text}" — no matching mood found. Try words like: chill, epic, happy, sad, rock, jazz, dark, energetic`,
+      confidence:         0,
+      source:             "local",
+      matchedKeywords:    [],
     };
   }
 
   const configs = matched.map((m) => m.config);
 
-  // Aggregate
+  // Aggregate numeric fields by mean, categorical by mode
   const config = {
     style:               mode(configs.map((c) => c.style))               ?? currentConfig.style               ?? "pop",
     arrangementPreset:   mode(configs.map((c) => c.arrangementPreset))   ?? currentConfig.arrangementPreset   ?? "radio",
@@ -179,9 +230,14 @@ export function parseMood(text = "", currentConfig = {}) {
     bpm:                 mean(configs.map((c) => c.bpm))                 ?? currentConfig.bpm                 ?? 120,
   };
 
-  const keywords     = matched.map((m) => m.keyword).join(", ");
-  const confidence   = Math.min(1, matched.length / tokens.length);
-  const interpretation = `Interpreted as: ${config.style}, ${config.arrangementPreset} preset, BPM ${config.bpm}, energy ${config.energy}`;
+  // FIX: confidence should INCREASE with more matched keywords, not decrease.
+  // Old formula: matched/tokens (penalised long sentences — backwards).
+  // New formula: sigmoid-like curve — each match increases confidence,
+  // capped at 0.95 so there's always a small amount of uncertainty.
+  const confidence = Math.min(0.95, 1 - Math.pow(0.6, matched.length));
+
+  const keywordStr     = matched.map((m) => m.keyword).join(", ");
+  const interpretation = `Interpreted as: ${config.style}, ${config.arrangementPreset} preset, BPM ${config.bpm}, energy ${config.energy} (matched: ${keywordStr})`;
 
   return {
     config,

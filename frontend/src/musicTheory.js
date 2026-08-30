@@ -27,12 +27,23 @@ const MINOR_SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10];
 const MAJOR_ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII"];
 const MINOR_ROMAN = ["i", "ii", "iii", "iv", "v", "vi", "vii"];
 
-// Tension scores keyed by Roman numeral root label (stripped of quality)
+// Tension scores keyed by Roman numeral root label.
+// Keys cover BOTH uppercase (major-quality degree) and lowercase (minor-quality degree)
+// because analyzeChord uses MAJOR_ROMAN for major chords and MINOR_ROMAN for minor.
 const TENSION_MAP = {
-  I: 0.1, IV: 0.1, VI: 0.1,          // stable
-  ii: 0.4, iii: 0.4, vi: 0.4,         // mild tension
-  V: 0.7, VII: 0.7,                    // dominant
-  "vii°": 0.9, chromatic: 0.9,        // high tension
+  // Stable — tonic/subdominant function
+  I:   0.1,  i:   0.1,
+  IV:  0.1,  iv:  0.15,
+  VI:  0.15, vi:  0.15,
+  // Mild tension — mediant / supertonic
+  II:  0.35, ii:  0.35,
+  III: 0.4,  iii: 0.4,
+  // Dominant tension
+  V:   0.7,  v:   0.6,
+  VII: 0.75, vii: 0.75,
+  // High tension
+  "vii°": 0.9,
+  chromatic: 0.9,
 };
 
 // Average tension threshold → preferred styles
@@ -69,13 +80,19 @@ function diatonicSet(tonicPc, intervals) {
  */
 function detectQuality(chordName) {
   const name = String(chordName).replace(/^[A-Ga-g][#b]?/, "");
+  // Order matters: more-specific patterns must come before their subsets.
   if (/dim|°/.test(name)) return "diminished";
   if (/aug|\+/.test(name)) return "augmented";
-  if (/^m[^a]|^min/.test(name)) return "minor";
+  // minor7 MUST come before minor (m7 contains m)
+  if (/m7b?5?|min7/.test(name)) return "minor7";
   if (/maj7|Δ/.test(name)) return "major7";
-  if (/m7|min7/.test(name)) return "minor7";
-  if (/7/.test(name) && !/maj/.test(name)) return "dominant";
-  if (/^[Mm]aj/.test(name) || name === "" || /^[A-Z]/.test(name.charAt(0)) === false) return "major";
+  if (/^m[^a]|^min|^-/.test(name)) return "minor";
+  // dominant 7 (plain 7 without maj)
+  if (/[0-9]/.test(name) && !/maj/.test(name) && !/min/.test(name)) return "dominant";
+  // sus, add, aug with numbers → still major quality root
+  if (/sus|add/.test(name)) return "major";
+  // empty suffix → plain major
+  if (name === "") return "major";
   return "major";
 }
 
@@ -112,9 +129,10 @@ export function detectKey(chords) {
         bestTonic = CHROMATIC[tonicPc];
         bestMode = mode;
       } else if (score === bestScore) {
-        // Tiebreak: pick tonic that appears most as a chord root
+        // Tiebreak: pick the tonic pitch-class that appears most as a chord root
         const tonicFreq = rootPcs.filter((pc) => pc === tonicPc).length;
-        const bestFreq = rootPcs.filter((pc) => pc === CHROMATIC.indexOf(bestTonic)).length;
+        const bestTonicPc = CHROMATIC.indexOf(bestTonic); // integer 0-11, always valid since bestTonic comes from CHROMATIC[x]
+        const bestFreq = rootPcs.filter((pc) => pc === bestTonicPc).length;
         if (tonicFreq > bestFreq) {
           bestTonic = CHROMATIC[tonicPc];
           bestMode = mode;
