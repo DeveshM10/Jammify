@@ -1,21 +1,21 @@
 /**
  * musicTheory.js
  *
- * Pure music theory engine — no hardcoded magic numbers, no dead code.
+ * Pure music theory engine - no hardcoded magic numbers, no dead code.
  *
  * All scale notes, tension scores, and style mappings are computed
  * dynamically from music theory first-principles.
  *
  * Exports:
- *   detectKey(chords)                → { tonic, mode, confidence }
- *   analyzeChord(name, tonic, mode)  → { romanNumeral, tensionScore, scaleDegree, quality, extensions }
- *   resolveVoiceLeading(...)         → Array<ChordAnalysis>
- *   analyzeProgression(chordNames)   → { tonic, mode, confidence, analyses, pattern, modulation }
- *   getScaleNotes(tonic, mode)       → string[]   (7 diatonic note names)
- *   getScalePcs(tonic, mode)         → number[]   (7 pitch-class integers 0–11)
- *   chooseStyleFromAnalysis(...)     → string
- *   detectProgressionPattern(...)    → PatternResult
- *   detectModulation(...)            → ModulationResult|null
+ *   detectKey(chords)                -> { tonic, mode, confidence }
+ *   analyzeChord(name, tonic, mode)  -> { romanNumeral, tensionScore, scaleDegree, quality, extensions }
+ *   resolveVoiceLeading(...)         -> Array<ChordAnalysis>
+ *   analyzeProgression(chordNames)   -> { tonic, mode, confidence, analyses, pattern, modulation }
+ *   getScaleNotes(tonic, mode)       -> string[]   (7 diatonic note names)
+ *   getScalePcs(tonic, mode)         -> number[]   (7 pitch-class integers 0-11)
+ *   chooseStyleFromAnalysis(...)     -> string
+ *   detectProgressionPattern(...)    -> PatternResult
+ *   detectModulation(...)            -> ModulationResult|null
  */
 
 import { Note, Chord } from "tonal";
@@ -40,8 +40,8 @@ const SCALE_INTERVALS = {
 // ─── Dynamic scale generation ────────────────────────────────────────────────
 
 /**
- * getScalePcs(tonic, mode) → number[] (7 pitch-class integers)
- * Fully dynamic — computes from first principles, nothing hardcoded.
+ * getScalePcs(tonic, mode) -> number[] (7 pitch-class integers)
+ * Fully dynamic - computes from first principles, nothing hardcoded.
  */
 export function getScalePcs(tonic, mode = "major") {
   const tonicPc = chordRootToPc(tonic) ?? 0;
@@ -50,7 +50,7 @@ export function getScalePcs(tonic, mode = "major") {
 }
 
 /**
- * getScaleNotes(tonic, mode) → string[] (7 note names, sharp notation)
+ * getScaleNotes(tonic, mode) -> string[] (7 note names, sharp notation)
  * Replaces the old hardcoded rootMap entirely.
  */
 export function getScaleNotes(tonic, mode = "major") {
@@ -59,7 +59,7 @@ export function getScaleNotes(tonic, mode = "major") {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Parse chord name → pitch-class index 0–11. Returns null if unparseable. */
+/** Parse chord name -> pitch-class index 0-11. Returns null if unparseable. */
 export function chordRootToPc(chordName) {
   if (!chordName) return null;
   const match = String(chordName).match(/^([A-Ga-g][#b]?)/);
@@ -76,11 +76,11 @@ function diatonicSet(tonicPc, mode = "major") {
 
 /**
  * Detect chord quality from name string.
- * Order matters — specific patterns before general ones.
+ * Order matters - specific patterns before general ones.
  */
 export function detectQuality(chordName) {
   const name = String(chordName).replace(/^[A-Ga-g][#b]?/, "");
-  if (/dim|°/.test(name))                            return "diminished";
+  if (/dim| deg/.test(name))                            return "diminished";
   if (/aug|\+/.test(name))                           return "augmented";
   if (/m7b5|ø/.test(name))                           return "half-dim";
   if (/m7|min7/.test(name))                          return "minor7";
@@ -99,7 +99,7 @@ export function detectQuality(chordName) {
 }
 
 /**
- * Chord extensions detected from quality — returns a sorted list of extensions.
+ * Chord extensions detected from quality - returns a sorted list of extensions.
  * Used to add colour to tension scoring and voicing.
  */
 function detectExtensions(quality) {
@@ -126,14 +126,14 @@ const MINOR_ROMAN = ["i",  "ii",  "iii",  "iv",  "v",  "vi",  "vii"];
 //
 // Tension is computed dynamically, not looked up from a fixed table.
 // Base tension by scale degree (0-based index in the diatonic scale):
-//   Degree 0 (I)   → 0.05  most stable
-//   Degree 3 (IV)  → 0.10  subdominant — mild pull
-//   Degree 5 (VI)  → 0.15  relative minor substitute
-//   Degree 1 (II)  → 0.35  pre-dominant
-//   Degree 2 (III) → 0.40  mediant
-//   Degree 4 (V)   → 0.70  dominant — strongest pull
-//   Degree 6 (VII) → 0.75  leading tone
-//   Chromatic      → 0.90  outside the key
+//   Degree 0 (I)   -> 0.05  most stable
+//   Degree 3 (IV)  -> 0.10  subdominant - mild pull
+//   Degree 5 (VI)  -> 0.15  relative minor substitute
+//   Degree 1 (II)  -> 0.35  pre-dominant
+//   Degree 2 (III) -> 0.40  mediant
+//   Degree 4 (V)   -> 0.70  dominant - strongest pull
+//   Degree 6 (VII) -> 0.75  leading tone
+//   Chromatic      -> 0.90  outside the key
 //
 // Then adjusted upward for chord extensions (each extension adds tension).
 
@@ -159,7 +159,7 @@ function computeTensionScore(scaleDegree, quality, extensions = []) {
     : quality === "dominant"  ? 0.05
     : 0;
 
-  // Extension boost — more extensions = slightly more colour/tension
+  // Extension boost - more extensions = slightly more colour/tension
   const extBoost = extensions.reduce((sum, ext) => sum + (EXTENSION_TENSION_BOOST[ext] || 0.01), 0);
 
   return Math.min(1.0, base + qualityMod + extBoost);
@@ -168,7 +168,7 @@ function computeTensionScore(scaleDegree, quality, extensions = []) {
 // ─── Key Detection ────────────────────────────────────────────────────────────
 
 /**
- * detectKey(chords: string[]) → { tonic, mode, confidence }
+ * detectKey(chords: string[]) -> { tonic, mode, confidence }
  *
  * Scores all 12 × 5 tonic+mode combinations. Returns the best fit.
  * Considers major, natural minor, dorian, mixolydian, phrygian.
@@ -214,7 +214,7 @@ export function detectKey(chords) {
 // ─── Roman Numeral Analysis ───────────────────────────────────────────────────
 
 /**
- * analyzeChord(chordName, tonic, mode) → ChordAnalysis
+ * analyzeChord(chordName, tonic, mode) -> ChordAnalysis
  *
  * Everything derived dynamically from the detected tonic + mode.
  */
@@ -247,7 +247,7 @@ export function analyzeChord(chordName, tonic, mode = "major") {
 
   const isMinorQuality = ["minor", "minor7", "half-dim", "diminished"].includes(quality);
   const romanBase  = isMinorQuality ? MINOR_ROMAN[degree] : MAJOR_ROMAN[degree];
-  const romanSuffix = quality === "diminished" ? "°"
+  const romanSuffix = quality === "diminished" ? " deg"
     : quality === "half-dim"  ? "ø"
     : quality === "augmented" ? "+"
     : quality === "dominant"  ? "7"
@@ -275,27 +275,27 @@ export function analyzeChord(chordName, tonic, mode = "major") {
  */
 const PROGRESSION_PATTERNS = [
   {
-    name: "I–V–vi–IV",
-    label: "Pop canon (I–V–vi–IV)",
+    name: "I-V-vi-IV",
+    label: "Pop canon (I-V-vi-IV)",
     // Scale degrees: 0=I, 4=V, 5=vi, 3=IV
     degrees: [0, 4, 5, 3],
     confidence: 1.0,
   },
   {
-    name: "ii–V–I",
-    label: "Jazz ii–V–I turnaround",
+    name: "ii-V-I",
+    label: "Jazz ii-V-I turnaround",
     degrees: [1, 4, 0],
     confidence: 1.0,
   },
   {
-    name: "I–IV–V",
-    label: "Classic I–IV–V",
+    name: "I-IV-V",
+    label: "Classic I-IV-V",
     degrees: [0, 3, 4],
     confidence: 0.9,
   },
   {
-    name: "I–vi–IV–V",
-    label: "50s doo-wop (I–vi–IV–V)",
+    name: "I-vi-IV-V",
+    label: "50s doo-wop (I-vi-IV-V)",
     degrees: [0, 5, 3, 4],
     confidence: 0.95,
   },
@@ -307,39 +307,39 @@ const PROGRESSION_PATTERNS = [
     confidence: 0.8,
   },
   {
-    name: "I–IV–vi–V",
-    label: "I–IV–vi–V variation",
+    name: "I-IV-vi-V",
+    label: "I-IV-vi-V variation",
     degrees: [0, 3, 5, 4],
     confidence: 0.85,
   },
   {
-    name: "vi–IV–I–V",
-    label: "Minor-flavour pop (vi–IV–I–V)",
+    name: "vi-IV-I-V",
+    label: "Minor-flavour pop (vi-IV-I-V)",
     degrees: [5, 3, 0, 4],
     confidence: 0.85,
   },
   {
-    name: "i–VI–III–VII",
-    label: "Minor pop (i–VI–III–VII)",
+    name: "i-VI-III-VII",
+    label: "Minor pop (i-VI-III-VII)",
     degrees: [0, 5, 2, 6], // in minor context
     confidence: 0.8,
   },
   {
-    name: "I–V–IV",
-    label: "Rock I–V–IV",
+    name: "I-V-IV",
+    label: "Rock I-V-IV",
     degrees: [0, 4, 3],
     confidence: 0.8,
   },
   {
-    name: "ii–V–I–IV",
-    label: "Extended jazz ii–V–I–IV",
+    name: "ii-V-I-IV",
+    label: "Extended jazz ii-V-I-IV",
     degrees: [1, 4, 0, 3],
     confidence: 0.9,
   },
 ];
 
 /**
- * detectProgressionPattern(chordAnalyses) → { name, label, confidence } | null
+ * detectProgressionPattern(chordAnalyses) -> { name, label, confidence } | null
  *
  * Looks for known progressions as contiguous or wrapping subsequences.
  * Returns the best-matching pattern or null.
@@ -381,7 +381,7 @@ export function detectProgressionPattern(chordAnalyses) {
 
 /**
  * detectModulation(chordNames, primaryTonic, primaryMode)
- * → { hasModulation, newTonic, newMode, atIndex, confidence } | null
+ * -> { hasModulation, newTonic, newMode, atIndex, confidence } | null
  *
  * Splits the progression in half and checks if the second half
  * fits a different key better than the first.
@@ -412,7 +412,7 @@ export function detectModulation(chordNames, primaryTonic, primaryMode) {
 // ─── Style Selection from Tension ────────────────────────────────────────────
 
 /**
- * chooseStyleFromAnalysis(chordAnalyses) → string
+ * chooseStyleFromAnalysis(chordAnalyses) -> string
  *
  * Dynamic: uses both styles in TENSION_STYLE_MAP based on mode.
  * Minor-key progressions prefer the second style option.
@@ -423,7 +423,7 @@ export function chooseStyleFromAnalysis(chordAnalyses, mode = "major") {
   const avg = chordAnalyses.reduce((sum, a) => sum + (a.tensionScore ?? 0.4), 0)
     / chordAnalyses.length;
 
-  // Dynamic style selection table — both options are now used
+  // Dynamic style selection table - both options are now used
   // Minor mode shifts preference toward the second (darker) option
   const styleMap = [
     { maxTension: 0.20, major: "acoustic", minor: "lo-fi"     },
@@ -449,7 +449,7 @@ export function chooseStyleFromAnalysis(chordAnalyses, mode = "major") {
  *
  * Returns chord tones that are also scale members of the detected key.
  * Falls back to the full scale if no overlap found.
- * Uses the tonal library for chord tones — no hardcoded lookup tables.
+ * Uses the tonal library for chord tones - no hardcoded lookup tables.
  */
 function getCandidateMelodyNotes(chordName, tonic, mode = "major") {
   const scalePcs = getScalePcs(tonic, mode);
@@ -479,11 +479,11 @@ function noteNameToMidi(noteName, octave) {
 
 /**
  * resolveVoiceLeading(chordNames, tonic, mode, sections)
- * → Array<ChordAnalysis>
+ * -> Array<ChordAnalysis>
  *
  * Greedy nearest-neighbour voice leading.
- * - Prefers descending resolution from dominant (V) → tonic (I)
- * - Prefers ascending resolution from leading tone (VII) → I
+ * - Prefers descending resolution from dominant (V) -> tonic (I)
+ * - Prefers ascending resolution from leading tone (VII) -> I
  * - Allows octave jumps at section boundaries
  */
 export function resolveVoiceLeading(chordNames, tonic, mode = "major", sections = []) {
@@ -570,10 +570,10 @@ export function resolveVoiceLeading(chordNames, tonic, mode = "major", sections 
 
 /**
  * analyzeProgression(chordNames)
- * → { tonic, mode, confidence, analyses, pattern, modulation }
+ * -> { tonic, mode, confidence, analyses, pattern, modulation }
  *
  * Complete pipeline:
- *   detectKey → resolveVoiceLeading → detectProgressionPattern → detectModulation
+ *   detectKey -> resolveVoiceLeading -> detectProgressionPattern -> detectModulation
  */
 export function analyzeProgression(chordNames) {
   const { tonic, mode, confidence } = detectKey(chordNames);

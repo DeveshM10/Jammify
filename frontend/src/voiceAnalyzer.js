@@ -5,22 +5,22 @@
  * No server round-trips. Works entirely via Web Audio API.
  *
  * Exports:
- *   startRecording(durationSeconds?) → Promise<Float32Array>
- *   analyzeBPM(samples, sampleRate)  → { bpm, confidence }
- *   analyzePitch(samples, sampleRate)→ { frequency, clarity, pitchClass }
- *   analyzeEnergy(samples)           → number  (0–1 normalised RMS)
- *   analyzeAll(durationSeconds?)     → Promise<VoiceAnalysisResult>
+ *   startRecording(durationSeconds?) -> Promise<Float32Array>
+ *   analyzeBPM(samples, sampleRate)  -> { bpm, confidence }
+ *   analyzePitch(samples, sampleRate)-> { frequency, clarity, pitchClass }
+ *   analyzeEnergy(samples)           -> number  (0-1 normalised RMS)
+ *   analyzeAll(durationSeconds?)     -> Promise<VoiceAnalysisResult>
  */
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 /**
  * @typedef {Object} VoiceAnalysisResult
  * @property {number|null} bpm
- * @property {number}      bpmConfidence   0–1
+ * @property {number}      bpmConfidence   0-1
  * @property {string|null} pitchClass      e.g. "A", "C#"
  * @property {number|null} frequency       Hz
- * @property {number}      pitchClarity    0–1
- * @property {number}      energy          0–1 normalised RMS
+ * @property {number}      pitchClarity    0-1
+ * @property {number}      energy          0-1 normalised RMS
  * @property {string}      suggestedStyle
  * @property {string}      suggestedPreset
  * @property {{ energy: number, vocalIntensity: number, arrangementDensity: number }} producerSettings
@@ -31,18 +31,18 @@
 const CHROMATIC = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 
 /**
- * ENERGY_STYLE_MAP — dynamic: both style options are now used.
+ * ENERGY_STYLE_MAP -- dynamic: both style options are now used.
  *
  * pitchClass (detected key) picks between the two style options:
- *   - Minor-sounding keys (A, D, E, B → frequent minor tonic roots) → styles[1]
- *   - Everything else → styles[0]
+ *   - Minor-sounding keys (A, D, E, B -> frequent minor tonic roots) -> styles[1]
+ *   - Everything else -> styles[0]
  * This replaces the previous dead code where styles[1] was never used.
  *
  * vocalIntensity is computed from a sigmoid curve on energy rather than
  * a fixed linear ramp (40 + energy*40), so it responds non-linearly:
- *   low energy  → vocalIntensity stays low (breathy, quiet)
- *   mid energy  → vocalIntensity rises quickly
- *   high energy → vocalIntensity saturates near 90
+ *   low energy  -> vocalIntensity stays low (breathy, quiet)
+ *   mid energy  -> vocalIntensity rises quickly
+ *   high energy -> vocalIntensity saturates near 90
  */
 const ENERGY_STYLE_MAP = [
   { max: 0.35, styles: ["lo-fi",   "acoustic"],  preset: "lofi",      baseEnergy: 25, baseDensity: 38 },
@@ -53,16 +53,16 @@ const ENERGY_STYLE_MAP = [
 /**
  * Pitch classes whose natural minor tonal centre makes the
  * darker style option (styles[1]) a better fit.
- * e.g. "A" → A minor is more common than A major in pop/rock.
+ * e.g. "A" -> A minor is more common than A major in pop/rock.
  */
 const MINOR_LEANING_ROOTS = new Set(["A", "D", "E", "B", "F#", "G#"]);
 
 /**
  * Compute vocal intensity dynamically from energy using a sigmoid curve.
  * Returns an integer in [20, 92].
- *   energy 0   → ~20
- *   energy 0.5 → ~56
- *   energy 1   → ~92
+ *   energy 0   -> ~20
+ *   energy 0.5 -> ~56
+ *   energy 1   -> ~92
  */
 function computeVocalIntensity(energy) {
   // Sigmoid: 1 / (1 + e^(-k*(x - 0.5))) stretched to [20, 92]
@@ -73,14 +73,14 @@ function computeVocalIntensity(energy) {
 
 /**
  * Compute arrangement density dynamically from energy + BPM.
- * Fast BPM + high energy → denser arrangement.
+ * Fast BPM + high energy -> denser arrangement.
  * Returns an integer in [28, 92].
  */
 function computeArrangementDensity(energy, bpm) {
-  const energyContrib = energy * 50;                         // 0–50
-  const bpmNorm       = bpm ? Math.min(1, (bpm - 60) / 140) : 0.5; // 0–1 for 60–200 BPM
-  const bpmContrib    = bpmNorm * 20;                        // 0–20
-  return Math.round(28 + energyContrib + bpmContrib);        // 28–98, capped below
+  const energyContrib = energy * 50;                         // 0-50
+  const bpmNorm       = bpm ? Math.min(1, (bpm - 60) / 140) : 0.5; // 0-1 for 60-200 BPM
+  const bpmContrib    = bpmNorm * 20;                        // 0-20
+  return Math.round(28 + energyContrib + bpmContrib);        // 28-98, capped below
 }
 
 // ─── Microphone Capture ───────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ function computeArrangementDensity(energy, bpm) {
  * Record from the microphone for `durationSeconds` seconds.
  * Returns a Float32Array of mono PCM samples + the sample rate.
  *
- * @param {number} durationSeconds  3–10, default 5
+ * @param {number} durationSeconds  3-10, default 5
  * @returns {Promise<{ samples: Float32Array, sampleRate: number }>}
  */
 export async function startRecording(durationSeconds = 5) {
@@ -115,7 +115,7 @@ export async function startRecording(durationSeconds = 5) {
 
   await new Promise((resolve) => {
     processor.onaudioprocess = (e) => {
-      // Copy — the buffer is reused
+      // Copy -- the buffer is reused
       chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
     };
     setTimeout(() => {
@@ -142,7 +142,7 @@ export async function startRecording(durationSeconds = 5) {
 // ─── Energy ───────────────────────────────────────────────────────────────────
 
 /**
- * Compute normalised RMS energy of the buffer → [0, 1].
+ * Compute normalised RMS energy of the buffer -> [0, 1].
  * @param {Float32Array} samples
  * @returns {number}
  */
@@ -153,7 +153,7 @@ export function analyzeEnergy(samples) {
     sum += samples[i] * samples[i];
   }
   const rms = Math.sqrt(sum / samples.length);
-  // Typical speech/humming RMS is ~0.01–0.3; clamp & normalise to [0,1]
+  // Typical speech/humming RMS is ~0.01-0.3; clamp & normalise to [0,1]
   return Math.min(1, rms / 0.3);
 }
 
@@ -193,7 +193,7 @@ function autocorrelate(signal, lagMin, lagMax) {
 }
 
 /**
- * analyzeBPM(samples, sampleRate) → { bpm: number|null, confidence: number }
+ * analyzeBPM(samples, sampleRate) -> { bpm: number|null, confidence: number }
  *
  * Uses 10ms onset frames + autocorrelation to detect tempo.
  * Confidence is normalised peak height relative to signal energy.
@@ -208,7 +208,7 @@ export function analyzeBPM(samples, sampleRate) {
   const framesPerSecond   = sampleRate / frameSizeSamples; // frames per second
 
   // Convert BPM range to lag range in frames
-  // bpm = 60 / (lag / framesPerSecond)  →  lag = 60 * framesPerSecond / bpm
+  // bpm = 60 / (lag / framesPerSecond)  ->  lag = 60 * framesPerSecond / bpm
   const lagMin = Math.round(60 * framesPerSecond / 220); // 220 BPM
   const lagMax = Math.round(60 * framesPerSecond / 40);  // 40  BPM
 
@@ -263,9 +263,9 @@ function computeNSDF(samples, lagMin, lagMax) {
 }
 
 /**
- * analyzePitch(samples, sampleRate) → { frequency: number|null, clarity: number, pitchClass: string|null }
+ * analyzePitch(samples, sampleRate) -> { frequency: number|null, clarity: number, pitchClass: string|null }
  *
- * Returns fundamental frequency in Hz and clarity (0–1).
+ * Returns fundamental frequency in Hz and clarity (0-1).
  * pitchClass is the nearest note name (e.g. "A", "C#").
  */
 export function analyzePitch(samples, sampleRate) {
@@ -285,7 +285,7 @@ export function analyzePitch(samples, sampleRate) {
 
   // NSDF clarity threshold for mic/voice input.
   // McLeod's original paper uses 0.8 for clean instrument recordings.
-  // For browser mic + human voice, 0.55 is the practical threshold —
+  // For browser mic + human voice, 0.55 is the practical threshold --
   // anything lower causes too many false positives from breath/noise.
   const CLARITY_THRESHOLD = 0.55;
   let bestLag     = null;
@@ -333,7 +333,7 @@ export function analyzePitch(samples, sampleRate) {
 export function mapVoiceAnalysisToSettings({ energy, bpm, pitchClass }) {
   const bucket = ENERGY_STYLE_MAP.find((b) => energy <= b.max) || ENERGY_STYLE_MAP[2];
 
-  // Pick style based on detected pitch class (minor-leaning keys → darker style)
+  // Pick style based on detected pitch class (minor-leaning keys -> darker style)
   const useDarkerStyle = pitchClass && MINOR_LEANING_ROOTS.has(pitchClass);
   const bandStyle      = useDarkerStyle ? bucket.styles[1] : bucket.styles[0];
 
@@ -354,7 +354,7 @@ export function mapVoiceAnalysisToSettings({ energy, bpm, pitchClass }) {
 }
 
 /**
- * analyzeAll(durationSeconds?) → Promise<VoiceAnalysisResult>
+ * analyzeAll(durationSeconds?) -> Promise<VoiceAnalysisResult>
  *
  * Records mic input, runs all analyses, returns the combined result.
  */

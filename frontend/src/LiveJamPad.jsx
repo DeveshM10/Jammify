@@ -25,45 +25,45 @@ const CIRCLE_OF_FIFTHS = [
   "F#", "Db", "Ab", "Eb", "Bb", "F",
 ];
 
-// Flat → sharp normalisation for index lookup
+// Flat -> sharp normalisation for index lookup
 const TONIC_NORM = {
   Db:"C#", Eb:"D#", Gb:"F#", Ab:"G#", Bb:"A#",
 };
 
 /**
  * Scale degree definitions for major and minor modes.
- * Everything is computed from intervals — no hardcoded note names.
+ * Everything is computed from intervals -- no hardcoded note names.
  */
 const SCALE_CONFIGS = {
   major: {
     offsets:  [0, 2, 4, 5, 7, 9, 11],
     qualities:["",  "m","m","", "", "m","dim"],
-    labels:   ["I","ii","iii","IV","V","vi","vii°"],
+    labels:   ["I","ii","iii","IV","V","vi","vii deg"],
     tensions: [0.05,0.35,0.40,0.10,0.70,0.15,0.75], // tension by scale degree
   },
   minor: {
     offsets:  [0, 2, 3, 5, 7, 8, 10],
     qualities:["m","dim","","m","m","",""],
-    labels:   ["i","ii°","III","iv","v","VI","VII"],
+    labels:   ["i","ii deg","III","iv","v","VI","VII"],
     tensions: [0.05,0.85,0.40,0.15,0.65,0.10,0.50],
   },
 };
 
 // Degree colour map: same degrees coloured consistently regardless of mode
 const DEGREE_COLORS = {
-  0: "#6D4AFF",  // I / i   — purple (tonic)
-  3: "#00B894",  // IV/ iv  — green  (subdominant)
-  4: "#FF6B8A",  // V / v   — pink   (dominant)
-  7: "#FDCB6E",  // V/V     — amber  (secondary dominant)
+  0: "#6D4AFF",  // I / i   -- purple (tonic)
+  3: "#00B894",  // IV/ iv  -- green  (subdominant)
+  4: "#FF6B8A",  // V / v   -- pink   (dominant)
+  7: "#FDCB6E",  // V/V     -- amber  (secondary dominant)
 };
 const ACTIVE_COLOR = "#6D4AFF";
 
 // ─── Pad chord generation ─────────────────────────────────────────────────────
 
 /**
- * getPadChords(tonic, mode) → Array<PadChord>
+ * getPadChords(tonic, mode) -> Array<PadChord>
  *
- * Fully dynamic — computes chord names, labels, Roman numerals,
+ * Fully dynamic -- computes chord names, labels, Roman numerals,
  * and tension scores from the tonic + mode at runtime.
  * Returns 8 chords: the 7 diatonic degrees + V/V (secondary dominant).
  */
@@ -85,7 +85,7 @@ function getPadChords(tonic, mode = "major") {
     };
   });
 
-  // 8th button: V/V — secondary dominant (major chord 2 semitones above tonic)
+  // 8th button: V/V -- secondary dominant (major chord 2 semitones above tonic)
   const vOfVIdx = (tonicIdx + 2) % 12;
   chords.push({
     name:        CHROMATIC[vOfVIdx],
@@ -99,22 +99,22 @@ function getPadChords(tonic, mode = "major") {
 }
 
 /**
- * getSuggestedNext(currentDegree, mode) → number[]
+ * getSuggestedNext(currentDegree, mode) -> number[]
  *
  * Returns the most likely next scale degrees to follow the current one,
  * based on common-practice voice-leading probabilities.
  * Used to highlight suggested next chords on the pad.
  */
 const NEXT_DEGREE_PROBS = {
-  // degree → most likely following degrees (ordered by probability)
-  0: [3, 4, 5],   // I  → IV, V, vi
-  1: [4, 0],      // ii → V, I
-  2: [5, 3],      // iii→ vi, IV
-  3: [0, 4, 1],   // IV → I, V, ii
-  4: [0, 5],      // V  → I, vi
-  5: [3, 1, 4],   // vi → IV, ii, V
-  6: [0],         // vii→ I
-  7: [0, 4],      // V/V→ V, I
+  // degree -> most likely following degrees (ordered by probability)
+  0: [3, 4, 5],   // I  -> IV, V, vi
+  1: [4, 0],      // ii -> V, I
+  2: [5, 3],      // iii-> vi, IV
+  3: [0, 4, 1],   // IV -> I, V, ii
+  4: [0, 5],      // V  -> I, vi
+  5: [3, 1, 4],   // vi -> IV, ii, V
+  6: [0],         // vii-> I
+  7: [0, 4],      // V/V-> V, I
 };
 
 // ─── Instrument map (dynamic from style) ─────────────────────────────────────
@@ -139,7 +139,7 @@ function getInstrumentForStyle(style) {
  *   tonic?:             string
  *   mode?:              "major"|"minor"
  *   style?:             string
- *   producerSettings?:  object   — passed from parent, no hardcoded default
+ *   producerSettings?:  object   -- passed from parent, no hardcoded default
  *   arrangementPreset?: string
  *   bpm?:               number
  *   onRecordComplete:   (track: object) => void
@@ -150,7 +150,7 @@ export default function LiveJamPad({
   tonic            = "C",
   mode             = "major",
   style            = "pop",
-  // No hardcoded default — parent's live producerSettings are used directly
+  // No hardcoded default -- parent's live producerSettings are used directly
   producerSettings,
   arrangementPreset = "radio",
   bpm              = 120,
@@ -165,7 +165,7 @@ export default function LiveJamPad({
     arrangementDensity: style === "jazz" ? 72 : 65,
   };
 
-  // Determine initial key index — try exact match, then flat/sharp normalised match
+  // Determine initial key index -- try exact match, then flat/sharp normalised match
   const initialKeyIdx = Math.max(0,
     CIRCLE_OF_FIFTHS.indexOf(tonic) !== -1
       ? CIRCLE_OF_FIFTHS.indexOf(tonic)
@@ -342,7 +342,7 @@ export default function LiveJamPad({
         ))}
       </div>
 
-      {/* Chord pad grid — 4×2 */}
+      {/* Chord pad grid -- 4×2 */}
       <div style={{
         display:"grid", gridTemplateColumns:"repeat(4, 1fr)",
         gap:10, width:"100%", maxWidth:520, marginBottom:14,
@@ -395,7 +395,7 @@ export default function LiveJamPad({
             >
               {/* Chord name */}
               <span style={{ lineHeight:1 }}>{chord.name}</span>
-              {/* Roman numeral label — dynamic from scale config */}
+              {/* Roman numeral label -- dynamic from scale config */}
               <span style={{ fontSize:10, opacity:0.75, fontWeight:700, letterSpacing:0.3 }}>
                 {chord.romanNumeral}
               </span>
@@ -406,7 +406,7 @@ export default function LiveJamPad({
                   letterSpacing:0.5, textTransform:"uppercase",
                 }}>next?</span>
               )}
-              {/* Tension dot — subtle visual cue */}
+              {/* Tension dot -- subtle visual cue */}
               <div style={{
                 width: 4, height: 4, borderRadius:"50%", marginTop:2,
                 background: isActive ? "rgba(255,255,255,0.7)"
@@ -439,7 +439,7 @@ export default function LiveJamPad({
           fontSize:12, color:colors.primary, fontWeight:700,
         }}>
           Playing: <strong>{activeChord}</strong>
-          {" — "}
+          {" -- "}
           {padChords.find((c) => c.name === activeChord)?.romanNumeral}
         </div>
       )}

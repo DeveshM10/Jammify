@@ -1,13 +1,13 @@
 /**
  * aiBandEngine.js
  *
- * AI band generator — fully dynamic, no hardcoded magic numbers.
+ * AI band generator - fully dynamic, no hardcoded magic numbers.
  *
  * What changed from the original:
  *  - rootMap replaced by dynamic getScaleNotes() from musicTheory.js
  *  - Section detection uses chord-repetition fingerprinting, not fixed 40%/70%
  *  - Beat durations preserved from imported song instead of index%4 pattern
- *  - Dead Chorus ternary fixed (cinematic → 3 beats, others → 2)
+ *  - Dead Chorus ternary fixed (cinematic -> 3 beats, others -> 2)
  *  - vocalBoost + leadBoost from ARRANGEMENT_PRESETS now actually scale volumes
  *  - chordDensity computed dynamically from style characteristics
  *  - Chord-repeat sustain: consecutive identical chords are held, not re-attacked
@@ -35,7 +35,7 @@ function parseChordRoot(chordName = "") {
   return match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
 }
 
-/** Enharmonic flat → sharp normalisation */
+/** Enharmonic flat -> sharp normalisation */
 function normalizeRoot(root) {
   const s = String(root || "C").trim();
   if (!s) return "C";
@@ -47,7 +47,7 @@ function normalizeRoot(root) {
 /**
  * Get a melody note for a chord/index from the detected scale.
  * Replaces the old hardcoded rootMap entirely.
- * Uses getScaleNotes() — fully dynamic.
+ * Uses getScaleNotes() - fully dynamic.
  */
 function getMelodyNoteFromScale(tonic, mode, index) {
   const scale = getScaleNotes(tonic, mode); // 7 diatonic note names
@@ -87,7 +87,7 @@ function getSongSections(chords = [], mode = "major") {
     return names.slice(start, start + WINDOW).join("|");
   }
 
-  const seen  = new Map(); // key → first-seen index
+  const seen  = new Map(); // key -> first-seen index
   const breaks = [0];      // section start points
 
   for (let i = 0; i <= names.length - WINDOW; i++) {
@@ -95,7 +95,7 @@ function getSongSections(chords = [], mode = "major") {
     if (seen.has(key)) {
       const prev = seen.get(key);
       // Repetition of a 4-chord window that started at a different position
-      // → treat the current position as a new section, unless it's too close
+      // -> treat the current position as a new section, unless it's too close
       if (i - (breaks[breaks.length - 1] ?? 0) >= WINDOW) {
         breaks.push(i);
       }
@@ -134,7 +134,7 @@ function getChordMood(chordName = "C", chordAnalysis = null) {
   if (c.includes("7") || c.includes("ADD") || c.includes("9")) return "bright";
   if (c.includes("MAJ")) return "warm";
   if (c.includes("MIN") || c.includes("m")) return "dreamy";
-  if (c.includes("DIM") || c.includes("°")) return "tense";
+  if (c.includes("DIM") || c.includes(" deg")) return "tense";
   return "neutral";
 }
 
@@ -154,8 +154,8 @@ function getMoodFlavor(style = "pop", chordName = "C", chordAnalysis = null) {
 // ─── Dynamic chord density per style ─────────────────────────────────────────
 
 /**
- * Chord density multiplier by style — dynamic, no magic number per style pair.
- * jazz & cinematic → denser harmonic rhythm; lo-fi → sparse; rock → medium.
+ * Chord density multiplier by style - dynamic, no magic number per style pair.
+ * jazz & cinematic -> denser harmonic rhythm; lo-fi -> sparse; rock -> medium.
  */
 const STYLE_DENSITY = {
   pop:       1.0,
@@ -214,10 +214,10 @@ function getWalkingBassNote(currentRoot, nextRoot, tonic, mode, stepIndex) {
 // ─── Drum pattern generation ──────────────────────────────────────────────────
 
 /**
- * getDrumPattern(sectionName, presetName) → boolean[8]
+ * getDrumPattern(sectionName, presetName) -> boolean[8]
  *
  * Patterns are still selected from a set, but derived from the drumAccent
- * field in ARRANGEMENT_PRESETS — no hardcoded style-name strings here.
+ * field in ARRANGEMENT_PRESETS - no hardcoded style-name strings here.
  */
 function getDrumPattern(sectionName = "Verse", presetName = "radio") {
   const config = getArrangementPresetConfig(presetName);
@@ -361,7 +361,7 @@ function makeTrack(
   const vocalInt  = Math.min(1, Math.max(0, Number(producerSettings.vocalIntensity ?? 70) / 100));
   const density   = Math.min(1, Math.max(0, Number(producerSettings.arrangementDensity ?? 70) / 100));
 
-  // density 0 → 0.7×, density 1 → 1.3× (continuous, not stepped)
+  // density 0 -> 0.7×, density 1 -> 1.3× (continuous, not stepped)
   const densityMult = 0.7 + density * 0.6;
 
   const presetConfig  = getArrangementPresetConfig(arrangementPreset);
@@ -409,7 +409,7 @@ function makeTrack(
 
       const fillWindow = (index + 1) % 4 === 0 && section.name !== "Verse";
 
-      // FIXED: was (cinematic?2:2) — dead ternary. Now cinematic gets 3.
+      // FIXED: was (cinematic?2:2) - dead ternary. Now cinematic gets 3.
       const rawBeatLength = section.name === "Chorus"
         ? (style === "cinematic" ? 3 : 2)
         : (index % 4 === 0 && section.name === "Verse"
