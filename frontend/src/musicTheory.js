@@ -2,9 +2,7 @@
  * musicTheory.js
  *
  * Pure music theory engine - no hardcoded magic numbers, no dead code.
- *
- * All scale notes, tension scores, and style mappings are computed
- * dynamically from music theory first-principles.
+ * Zero external dependencies - all pure JS math.
  *
  * Exports:
  *   detectKey(chords)                -> { tonic, mode, confidence }
@@ -18,7 +16,7 @@
  *   detectModulation(...)            -> ModulationResult|null
  */
 
-import { Note, Chord } from "tonal";
+// No tonal import needed - all calculations are pure math
 
 // ─── Chromatic reference ──────────────────────────────────────────────────────
 
@@ -64,8 +62,15 @@ export function chordRootToPc(chordName) {
   if (!chordName) return null;
   const match = String(chordName).match(/^([A-Ga-g][#b]?)/);
   if (!match) return null;
-  const n = Note.get(Note.pitchClass(match[1]));
-  return n.chroma ?? null;
+  // Pure math: map note name to chroma without tonal library
+  const raw = match[1];
+  const letter = raw[0].toUpperCase();
+  const accidental = raw[1] || "";
+  const BASE_PC = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
+  const base = BASE_PC[letter];
+  if (base === undefined) return null;
+  const shift = accidental === "#" ? 1 : accidental === "b" ? -1 : 0;
+  return ((base + shift) + 12) % 12;
 }
 
 /** diatonic pitch-class set for a given tonic + mode */
@@ -445,36 +450,61 @@ export function chooseStyleFromAnalysis(chordAnalyses, mode = "major") {
 // ─── Voice Leading ────────────────────────────────────────────────────────────
 
 /**
+ * Pure-math chord tones for common chord qualities.
+ * Returns semitone intervals from root.
+ */
+function getChordIntervals(quality) {
+  const map = {
+    major:      [0, 4, 7],
+    minor:      [0, 3, 7],
+    diminished: [0, 3, 6],
+    augmented:  [0, 4, 8],
+    "half-dim": [0, 3, 6, 10],
+    dominant:   [0, 4, 7, 10],
+    dominant9:  [0, 4, 7, 10, 14],
+    dominant11: [0, 4, 7, 10, 14, 17],
+    dominant13: [0, 4, 7, 10, 14, 17, 21],
+    major7:     [0, 4, 7, 11],
+    minor7:     [0, 3, 7, 10],
+    add9:       [0, 4, 7, 14],
+    sus4:       [0, 5, 7],
+    sus2:       [0, 2, 7],
+    major6:     [0, 4, 7, 9],
+  };
+  return map[quality] || map.major;
+}
+
+/**
  * getCandidateMelodyNotes(chordName, tonic, mode)
- *
- * Returns chord tones that are also scale members of the detected key.
- * Falls back to the full scale if no overlap found.
- * Uses the tonal library for chord tones - no hardcoded lookup tables.
+ * Pure math - no tonal library dependency.
  */
 function getCandidateMelodyNotes(chordName, tonic, mode = "major") {
   const scalePcs = getScalePcs(tonic, mode);
   const scaleSet = new Set(scalePcs);
 
-  // Get chord tones from tonal
-  const chordData = Chord.get(chordName);
-  let notePcs = [];
-  if (chordData.notes && chordData.notes.length > 0) {
-    notePcs = chordData.notes
-      .map((n) => Note.get(n).chroma)
-      .filter((pc) => pc !== undefined && pc !== null);
-  }
+  const rootPc  = chordRootToPc(chordName) ?? chordRootToPc(tonic) ?? 0;
+  const quality = detectQuality(chordName);
+  const intervals = getChordIntervals(quality);
 
-  // Prefer chord tones that are also in the key
+  // Compute chord tone pitch classes
+  const notePcs = intervals.map((i) => (rootPc + i) % 12);
+
+  // Prefer chord tones that are also in the key scale
   const inScale = notePcs.filter((pc) => scaleSet.has(pc));
-
-  // If no overlap, use all chord tones, then fall back to scale tones
   const candidates = inScale.length > 0 ? inScale : (notePcs.length > 0 ? notePcs : scalePcs);
 
   return candidates.map((pc) => CHROMATIC[pc]);
 }
 
+/**
+ * noteNameToMidi(noteName, octave) -> MIDI number
+ * Pure math - no tonal library dependency.
+ */
 function noteNameToMidi(noteName, octave) {
-  return Note.midi(`${noteName}${octave}`) ?? 60;
+  const pc = chordRootToPc(noteName);
+  if (pc === null) return 60;
+  // MIDI formula: C4 = 60, so midi = (octave + 1) * 12 + pc
+  return (Number(octave) + 1) * 12 + pc;
 }
 
 /**
@@ -491,7 +521,6 @@ export function resolveVoiceLeading(chordNames, tonic, mode = "major", sections 
 
   const result   = [];
   let prevMidi   = null;
-  const tonicPc  = chordRootToPc(tonic) ?? 0;
 
   for (let i = 0; i < chordNames.length; i++) {
     const chordName  = chordNames[i];
