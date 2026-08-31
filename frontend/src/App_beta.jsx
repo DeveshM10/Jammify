@@ -2022,201 +2022,132 @@ async function importSong() {
       Hackathon demo: paste a song URL → generate a band → tap play
     </div>
 
+    {/* ── Import Bar ──────────────────────────────────────────────────── */}
     <div
         style={{
             display: "flex",
-            alignItems: "center",
-            gap: 10,
+            flexDirection: "column",
+            gap: 12,
             width: "90%",
-            maxWidth: 800
+            maxWidth: 900,
         }}
     >
-
+      {/* Row 1: URL input + Import button + Style picker */}
+      <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
         <TextField
-            fullWidth
+            style={{ flex:1, minWidth:220 }}
             size="small"
             label="Ultimate Guitar URL"
-            placeholder="Paste Ultimate Guitar song URL"
+            placeholder="Paste Ultimate Guitar song URL here"
             value={songUrl}
             onChange={(e) => setSongUrl(e.target.value)}
             disabled={importing}
         />
-
         <Button
             variant="contained"
             onClick={importSong}
             disabled={!songUrl.trim() || importing}
-            sx={{
-                backgroundColor: colors.primary,
-                borderRadius: 3,
-                textTransform: "none",
-                whiteSpace: "nowrap"
-            }}
+            sx={{ backgroundColor: colors.primary, borderRadius: 3, textTransform:"none", whiteSpace:"nowrap" }}
         >
-            {importing ? "Importing..." : "Import"}
+            {importing ? "Importing..." : "🎵 Import"}
         </Button>
-
         <TextField
             select
             size="small"
             label="Band style"
             value={bandStyle}
-            onChange={(event) => setBandStyle(event.target.value)}
-            sx={{ minWidth: 150 }}
+            onChange={(e) => setBandStyle(e.target.value)}
+            sx={{ minWidth: 140 }}
         >
-            {styleOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                </MenuItem>
-            ))}
+            {styleOptions.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
         </TextField>
+      </div>
 
-        <div
-            style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 8,
-                alignItems: "center",
-                background: "rgba(255,255,255,0.35)",
-                border: `1px solid ${colors.border}`,
-                borderRadius: 12,
-                padding: "8px 10px",
-                maxWidth: 520,
-            }}
-        >
-            {arrangementPresetOptions.map((option) => (
-                <Button
-                    key={option.value}
-                    variant={arrangementPreset === option.value ? "contained" : "outlined"}
-                    size="small"
-                    onClick={() => setArrangementPreset(option.value)}
-                    sx={{
-                        borderRadius: 999,
-                        minWidth: 0,
-                        px: 1.5,
-                        py: 0.6,
-                        textTransform: "none",
-                        fontSize: 12,
-                        backgroundColor: arrangementPreset === option.value ? colors.primary : "transparent",
-                        borderColor: colors.border,
-                        color: arrangementPreset === option.value ? "white" : colors.text,
-                        whiteSpace: "nowrap",
-                    }}
-                >
-                    {option.label}
-                </Button>
-            ))}
-        </div>
-
-        <div
-            style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 8,
-                alignItems: "center",
-                background: "rgba(255,255,255,0.35)",
-                border: `1px solid ${colors.border}`,
-                borderRadius: 12,
-                padding: "8px 10px",
-                maxWidth: 520,
-            }}
-        >
-            {aiBandInstrumentOptions.map((option) => {
-                const active = !!aiBandSelection[option.key];
-                return (
-                    <Button
-                        key={option.key}
-                        variant={active ? "contained" : "outlined"}
-                        onClick={() => setAiBandSelection(prev => ({ ...prev, [option.key]: !prev[option.key] }))}
-                        size="small"
-                        sx={{
-                            borderRadius: 999,
-                            minWidth: 0,
-                            px: 1.5,
-                            py: 0.6,
-                            textTransform: "none",
-                            fontSize: 12,
-                            backgroundColor: active ? colors.primary : "transparent",
-                            borderColor: colors.border,
-                            color: active ? "white" : colors.text,
-                            whiteSpace: "nowrap",
-                        }}
-                    >
-                        {option.label}
-                    </Button>
-                );
-            })}
-        </div>
-
-        <div
-            style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 18,
-                background: "rgba(16, 24, 40, 0.64)",
-                border: `1px solid ${colors.border}`,
-                borderRadius: 12,
-                padding: "10px 12px",
-                minWidth: 420,
-                flexWrap: "wrap",
-            }}
-        >
-            {[
-                { key: "energy", label: "Energy", value: aiProducerSettings.energy },
-                { key: "vocalIntensity", label: "Vocal", value: aiProducerSettings.vocalIntensity },
-                { key: "arrangementDensity", label: "Density", value: aiProducerSettings.arrangementDensity },
-            ].map((control) => (
-                <div key={control.key} style={{ minWidth: 120, flex: 1 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "white", marginBottom: 4 }}>
-                        <span>{control.label}</span>
-                        <span>{control.value}</span>
-                    </div>
-                    <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        value={control.value}
-                        onChange={(event) => setAiProducerSettings(prev => ({
-                            ...prev,
-                            [control.key]: Number(event.target.value),
-                        }))}
-                        style={{ width: "100%" }}
-                    />
-                </div>
-            ))}
-        </div>
-
-        <Button
-            variant="outlined"
-            onClick={() => generateLocalBand(importedSong, bandStyle)}
-            disabled={!importedSong || !Array.isArray(importedSong.chords) || importedSong.chords.length === 0}
+      {/* Row 2: Arrangement presets */}
+      <div style={{ display:"flex", flexWrap:"wrap", gap:8, alignItems:"center" }}>
+        <span style={{ fontSize:12, fontWeight:700, color:colors.text, opacity:0.6, marginRight:4 }}>Preset:</span>
+        {arrangementPresetOptions.map((option) => (
+          <Button
+            key={option.value}
+            variant={arrangementPreset === option.value ? "contained" : "outlined"}
+            size="small"
+            onClick={() => setArrangementPreset(option.value)}
             sx={{
-                borderRadius: 3,
-                textTransform: "none",
-                whiteSpace: "nowrap"
+              borderRadius:999, minWidth:0, px:1.5, py:0.5,
+              textTransform:"none", fontSize:12,
+              backgroundColor: arrangementPreset === option.value ? colors.primary : "transparent",
+              borderColor: colors.border,
+              color: arrangementPreset === option.value ? "white" : colors.text,
             }}
-        >
-            🤖 Generate Band
-        </Button>
+          >{option.label}</Button>
+        ))}
+      </div>
 
-        <Button
-            variant="outlined"
-            onClick={() => {
-                const fresh = buildDemoBand(bandStyle, aiBandSelection, aiProducerSettings, arrangementPreset);
-                stopProgression();
-                setTracks(fresh);
-                setSelectedTrack(fresh[0]?.id ?? null);
-                setTheoryMeta(fresh[0]?.theoryMeta || null);
-                setImportError("Demo arrangement refreshed with the chosen production preset.");
-            }}
-            sx={{
-                borderRadius: 3,
-                textTransform: "none",
-                whiteSpace: "nowrap"
-            }}
-        >
-            🎛 Refresh Demo
-        </Button>
+      {/* Row 3: Instrument toggles */}
+      <div style={{ display:"flex", flexWrap:"wrap", gap:8, alignItems:"center" }}>
+        <span style={{ fontSize:12, fontWeight:700, color:colors.text, opacity:0.6, marginRight:4 }}>Tracks:</span>
+        {aiBandInstrumentOptions.map((option) => {
+          const active = !!aiBandSelection[option.key];
+          return (
+            <Button
+              key={option.key}
+              variant={active ? "contained" : "outlined"}
+              size="small"
+              onClick={() => setAiBandSelection(prev => ({ ...prev, [option.key]: !prev[option.key] }))}
+              sx={{
+                borderRadius:999, minWidth:0, px:1.5, py:0.5,
+                textTransform:"none", fontSize:12,
+                backgroundColor: active ? colors.primary : "transparent",
+                borderColor: colors.border,
+                color: active ? "white" : colors.text,
+              }}
+            >{option.label}</Button>
+          );
+        })}
+      </div>
+
+      {/* Row 4: Producer sliders + Generate + Refresh */}
+      <div style={{ display:"flex", flexWrap:"wrap", gap:12, alignItems:"center" }}>
+        <div style={{
+          display:"flex", alignItems:"center", gap:14,
+          background:"rgba(16,24,40,0.68)", borderRadius:12,
+          padding:"10px 14px", flex:1, minWidth:280, flexWrap:"wrap"
+        }}>
+          {[
+            { key:"energy",             label:"Energy",  value:aiProducerSettings.energy },
+            { key:"vocalIntensity",     label:"Vocal",   value:aiProducerSettings.vocalIntensity },
+            { key:"arrangementDensity", label:"Density", value:aiProducerSettings.arrangementDensity },
+          ].map((ctrl) => (
+            <div key={ctrl.key} style={{ minWidth:100, flex:1 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"white", marginBottom:3 }}>
+                <span>{ctrl.label}</span><span>{ctrl.value}</span>
+              </div>
+              <input type="range" min={0} max={100} value={ctrl.value}
+                onChange={(e) => setAiProducerSettings(prev => ({ ...prev, [ctrl.key]: Number(e.target.value) }))}
+                style={{ width:"100%" }}
+              />
+            </div>
+          ))}
+        </div>
+
+        <Button variant="contained"
+          onClick={() => generateLocalBand(importedSong, bandStyle)}
+          disabled={!importedSong || !Array.isArray(importedSong?.chords) || importedSong.chords.length === 0}
+          sx={{ borderRadius:3, textTransform:"none", whiteSpace:"nowrap", backgroundColor:colors.primary }}
+        >🤖 Generate Band</Button>
+
+        <Button variant="outlined"
+          onClick={() => {
+            const fresh = buildDemoBand(bandStyle, aiBandSelection, aiProducerSettings, arrangementPreset);
+            stopProgression();
+            setTracks(fresh);
+            setSelectedTrack(fresh[0]?.id ?? null);
+            setTheoryMeta(fresh[0]?.theoryMeta || null);
+            setImportError("Demo arrangement refreshed.");
+          }}
+          sx={{ borderRadius:3, textTransform:"none", whiteSpace:"nowrap" }}
+        >🎛 Refresh Demo</Button>
+      </div>
 
     </div>
 
