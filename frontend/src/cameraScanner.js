@@ -145,7 +145,7 @@ export async function extractChords(imageData) {
       const confidence = word.confidence ?? 0; // 0–100
 
       // Split on common delimiters in case multiple chords are fused
-      const tokens = text.split(/[\s,|/\\-]+/).filter(Boolean);
+      const tokens = text.split(/[\s,|/\\\-]+/).filter(Boolean);
 
       for (const token of tokens) {
         const valid = validateChord(token);
@@ -160,7 +160,7 @@ export async function extractChords(imageData) {
     }
   } else {
     // Fallback: split raw text and validate without confidence data
-    const tokens = rawText.split(/[\s,|/\\-\n]+/).filter(Boolean);
+    const tokens = rawText.split(/[\s,|/\\\-\n]+/).filter(Boolean);
     for (const token of tokens) {
       const valid = validateChord(token);
       if (valid && !chords.includes(valid)) {
