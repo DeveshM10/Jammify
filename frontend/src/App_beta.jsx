@@ -459,6 +459,10 @@ function App() {
 
   // ── Live Jam Pad state ───────────────────────────────────────────────────
   const [jamPadOpen,        setJamPadOpen]        = useState(false);
+
+  // ── Theory intelligence state ─────────────────────────────────────────────
+  // Populated from theoryMeta on the first track after every band generation.
+  const [theoryMeta,        setTheoryMeta]        = useState(null);
   const [jamName, setJamName] = useState("My Jam");
   const [savedJams, setSavedJams] = useState([]);
   const [savingJam, setSavingJam] = useState(false);
@@ -1915,6 +1919,7 @@ const generateLocalBand = (song = importedSong, style = bandStyle) => {
     stopProgression();
     setTracks(demoBand);
     setSelectedTrack(demoBand[0]?.id ?? null);
+    setTheoryMeta(demoBand[0]?.theoryMeta || null);
     setImportError("No valid song was imported, so a demo band was loaded instead.");
     return;
   }
@@ -1925,6 +1930,7 @@ const generateLocalBand = (song = importedSong, style = bandStyle) => {
 
   setTracks(nextTracks);
   setSelectedTrack(nextTracks[0]?.id ?? null);
+  setTheoryMeta(nextTracks[0]?.theoryMeta || null);
   setImportError("");
 };
 
@@ -2200,6 +2206,7 @@ async function importSong() {
                 stopProgression();
                 setTracks(fresh);
                 setSelectedTrack(fresh[0]?.id ?? null);
+                setTheoryMeta(fresh[0]?.theoryMeta || null);
                 setImportError("Demo arrangement refreshed with the chosen production preset.");
             }}
             sx={{
@@ -2457,7 +2464,8 @@ async function importSong() {
     {/* Live Jam Pad */}
     {jamPadOpen && (
         <LiveJamPad
-            tonic={voiceResult?.detectedKey || "C"}
+            tonic={voiceResult?.detectedKey || theoryMeta?.tonic || "C"}
+            mode={theoryMeta?.mode || "major"}
             style={bandStyle}
             producerSettings={aiProducerSettings}
             arrangementPreset={arrangementPreset}
@@ -2700,6 +2708,77 @@ async function importSong() {
 
 
       </div>
+
+      {/* ── Intelligence Banner ─────────────────────────────────────────── */}
+      {theoryMeta && (
+        <div style={{
+          width: "90%", maxWidth: 800,
+          background: "rgba(109,74,255,0.07)",
+          border: `1px solid ${colors.border}`,
+          borderRadius: 14,
+          padding: "12px 18px",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 10,
+          alignItems: "center",
+        }}>
+          {/* Key + mode */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "4px 12px", borderRadius: 999,
+            background: theoryMeta.mode === "minor"
+              ? "rgba(255,107,138,0.12)"
+              : "rgba(109,74,255,0.12)",
+            border: `1px solid ${theoryMeta.mode === "minor" ? colors.danger : colors.primary}`,
+          }}>
+            <span style={{ fontSize: 15, fontWeight: 900, color: theoryMeta.mode === "minor" ? colors.danger : colors.primary }}>
+              🎵 {theoryMeta.tonic} {theoryMeta.mode}
+            </span>
+            <span style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+              color: theoryMeta.mode === "minor" ? colors.danger : colors.primary,
+              opacity: 0.75, textTransform: "uppercase",
+            }}>
+              {theoryMeta.confidencePct}% match
+            </span>
+          </div>
+
+          {/* Progression pattern */}
+          {theoryMeta.pattern && (
+            <div style={{
+              padding: "4px 12px", borderRadius: 999,
+              background: "rgba(0,184,148,0.10)",
+              border: "1px solid #00B894",
+              fontSize: 12, fontWeight: 700, color: "#00897B",
+            }}>
+              📐 {theoryMeta.pattern}
+            </div>
+          )}
+
+          {/* Modulation */}
+          {theoryMeta.modulation && (
+            <div style={{
+              padding: "4px 12px", borderRadius: 999,
+              background: "rgba(253,203,110,0.15)",
+              border: "1px solid #FDCB6E",
+              fontSize: 12, fontWeight: 700, color: "#B7791F",
+            }}>
+              🔀 {theoryMeta.modulation}
+            </div>
+          )}
+
+          {/* Dismiss */}
+          <button
+            onClick={() => setTheoryMeta(null)}
+            style={{
+              marginLeft: "auto", background: "none", border: "none",
+              cursor: "pointer", fontSize: 14, opacity: 0.4, color: colors.text,
+              padding: "2px 6px",
+            }}
+            aria-label="Dismiss intelligence banner"
+          >✕</button>
+        </div>
+      )}
 
       {isPlaying && currentSection && (
         <div

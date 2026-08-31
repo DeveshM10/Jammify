@@ -30,12 +30,58 @@
 
 const CHROMATIC = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 
-// Energy thresholds → style mapping (Requirement 4)
+/**
+ * ENERGY_STYLE_MAP — dynamic: both style options are now used.
+ *
+ * pitchClass (detected key) picks between the two style options:
+ *   - Minor-sounding keys (A, D, E, B → frequent minor tonic roots) → styles[1]
+ *   - Everything else → styles[0]
+ * This replaces the previous dead code where styles[1] was never used.
+ *
+ * vocalIntensity is computed from a sigmoid curve on energy rather than
+ * a fixed linear ramp (40 + energy*40), so it responds non-linearly:
+ *   low energy  → vocalIntensity stays low (breathy, quiet)
+ *   mid energy  → vocalIntensity rises quickly
+ *   high energy → vocalIntensity saturates near 90
+ */
 const ENERGY_STYLE_MAP = [
-  { max: 0.35, styles: ["lo-fi", "acoustic"],    preset: "lofi",      energySetting: 30, density: 40 },
-  { max: 0.65, styles: ["pop",   "jazz"],         preset: "radio",     energySetting: 55, density: 60 },
-  { max: 1.00, styles: ["rock",  "cinematic"],    preset: "live-band", energySetting: 85, density: 80 },
+  { max: 0.35, styles: ["lo-fi",   "acoustic"],  preset: "lofi",      baseEnergy: 25, baseDensity: 38 },
+  { max: 0.65, styles: ["pop",     "jazz"],       preset: "radio",     baseEnergy: 52, baseDensity: 58 },
+  { max: 1.00, styles: ["rock",    "cinematic"],  preset: "live-band", baseEnergy: 82, baseDensity: 78 },
 ];
+
+/**
+ * Pitch classes whose natural minor tonal centre makes the
+ * darker style option (styles[1]) a better fit.
+ * e.g. "A" → A minor is more common than A major in pop/rock.
+ */
+const MINOR_LEANING_ROOTS = new Set(["A", "D", "E", "B", "F#", "G#"]);
+
+/**
+ * Compute vocal intensity dynamically from energy using a sigmoid curve.
+ * Returns an integer in [20, 92].
+ *   energy 0   → ~20
+ *   energy 0.5 → ~56
+ *   energy 1   → ~92
+ */
+function computeVocalIntensity(energy) {
+  // Sigmoid: 1 / (1 + e^(-k*(x - 0.5))) stretched to [20, 92]
+  const k          = 8;
+  const sigmoid    = 1 / (1 + Math.exp(-k * (energy - 0.5)));
+  return Math.round(20 + sigmoid * 72);
+}
+
+/**
+ * Compute arrangement density dynamically from energy + BPM.
+ * Fast BPM + high energy → denser arrangement.
+ * Returns an integer in [28, 92].
+ */
+function computeArrangementDensity(energy, bpm) {
+  const energyContrib = energy * 50;                         // 0–50
+  const bpmNorm       = bpm ? Math.min(1, (bpm - 60) / 140) : 0.5; // 0–1 for 60–200 BPM
+  const bpmContrib    = bpmNorm * 20;                        // 0–20
+  return Math.round(28 + energyContrib + bpmContrib);        // 28–98, capped below
+}
 
 // ─── Microphone Capture ───────────────────────────────────────────────────────
 
@@ -276,24 +322,34 @@ export function analyzePitch(samples, sampleRate) {
 // ─── Full Pipeline ────────────────────────────────────────────────────────────
 
 /**
- * Map voice analysis result to Arranger configuration.
- * @param {{ energy: number, bpm: number|null, pitchClass: string|null }} result
- * @returns {{ bandStyle: string, arrangementPreset: string, producerSettings: object, bpm: string }}
+ * mapVoiceAnalysisToSettings({ energy, bpm, pitchClass })
+ *
+ * Dynamic style selection:
+ *   - Both styles[0] and styles[1] are now used based on detected pitch class
+ *   - vocalIntensity computed from sigmoid curve, not hardcoded linear ramp
+ *   - arrangementDensity accounts for BPM as well as energy
+ *   - detectedKey forwarded so buildBandFromSong can use it as the tonic
  */
 export function mapVoiceAnalysisToSettings({ energy, bpm, pitchClass }) {
   const bucket = ENERGY_STYLE_MAP.find((b) => energy <= b.max) || ENERGY_STYLE_MAP[2];
 
+  // Pick style based on detected pitch class (minor-leaning keys → darker style)
+  const useDarkerStyle = pitchClass && MINOR_LEANING_ROOTS.has(pitchClass);
+  const bandStyle      = useDarkerStyle ? bucket.styles[1] : bucket.styles[0];
+
+  // Energy setting: scale from bucket base linearly within bucket's energy range
+  const energySetting = Math.round(bucket.baseEnergy + (energy - 0) * 15);
+
   return {
-    bandStyle:          bucket.styles[0],
+    bandStyle,
     arrangementPreset:  bucket.preset,
     producerSettings: {
-      energy:              bucket.energySetting,
-      vocalIntensity:      Math.round(40 + energy * 40),
-      arrangementDensity:  bucket.density,
+      energy:              Math.min(98, energySetting),
+      vocalIntensity:      computeVocalIntensity(energy),
+      arrangementDensity:  Math.min(92, computeArrangementDensity(energy, bpm)),
     },
-    // bpm kept as number internally; callers convert to string for the BPM input field
-    bpm:        bpm ? Math.round(bpm) : null,
-    detectedKey: pitchClass,
+    bpm:         bpm ? Math.round(bpm) : null,
+    detectedKey: pitchClass,   // forwarded to buildBandFromSong as tonic hint
   };
 }
 
