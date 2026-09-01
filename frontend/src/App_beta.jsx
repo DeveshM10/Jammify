@@ -2036,7 +2036,7 @@ async function importSong() {
         }}
     >
       {/* Row 1: URL input + Import button + Style picker */}
-      <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap: window.innerWidth < 640 ? "wrap" : "wrap", flexDirection: window.innerWidth < 640 ? "column" : "row" }}>
+      <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap: "wrap", flexDirection: window.innerWidth < 640 ? "column" : "row" }}>
         <TextField
             style={{ flex:1, minWidth: window.innerWidth < 640 ? "100%" : 220 }}
             size="small"
@@ -3094,7 +3094,7 @@ async function importSong() {
                     height:80,
                     width:3,
                     background:colors.primary,
-                    transition:`left ${60000 / bpmRef.current}ms linear`,
+                    transition:`left ${60000 / Number(bpm)}ms linear`,
                     zIndex:5
                 }}
             />
