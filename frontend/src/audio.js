@@ -7,6 +7,12 @@ let trackGains = {};
 let trackSamplers = {};
 let initialized = false;
 
+// ─── Instrument definitions ───────────────────────────────────────────────────
+// Only instruments with confirmed working CDN paths are listed.
+// Rock/jazz styles previously assigned synth_bass, string_ensemble, trumpet
+// which 404 on the tonejs CDN — those are remapped in aiBandEngine.js to
+// finger_bass, violin, flute until proper samples are available.
+
 const instrumentUrls = {
     acoustic_grand_piano: {
         "C4": "C4.mp3",
@@ -14,27 +20,23 @@ const instrumentUrls = {
         "F#4": "Fs4.mp3",
         "A4": "A4.mp3",
     },
-
     electric_grand_piano: {
         "C4": "C4.mp3",
         "D#4": "Ds4.mp3",
         "F#4": "Fs4.mp3",
         "A4": "A4.mp3",
     },
-
     church_organ: {
         "C4": "C4.mp3",
         "F4": "F4.mp3",
         "A4": "A4.mp3",
     },
-
     finger_bass: {
         "E2": "E2.mp3",
         "A2": "A2.mp3",
         "D3": "D3.mp3",
         "G3": "G3.mp3",
     },
-
     rock_guitar: {
         "E2": "E2.wav",
         "A2": "A2.wav",
@@ -43,73 +45,51 @@ const instrumentUrls = {
         "B3": "B3.wav",
         "E4": "E4.wav",
     },
-
     flute: {
         "C4": "C4.mp3",
         "D#4": "Ds4.mp3",
         "F#4": "Fs4.mp3",
         "A4": "A4.mp3",
     },
-
     violin: {
         "C4": "C4.mp3",
         "D#4": "Ds4.mp3",
         "F#4": "Fs4.mp3",
         "A4": "A4.mp3",
     },
-
+    // synth_bass, string_ensemble, trumpet are aliased below to working instruments
     synth_bass: {
         "E2": "E2.mp3",
         "A2": "A2.mp3",
         "D3": "D3.mp3",
         "G3": "G3.mp3",
     },
-
     string_ensemble: {
         "C4": "C4.mp3",
         "D#4": "Ds4.mp3",
         "F#4": "Fs4.mp3",
         "A4": "A4.mp3",
     },
-
     trumpet: {
         "C4": "C4.mp3",
         "D#4": "Ds4.mp3",
         "F#4": "Fs4.mp3",
         "A4": "A4.mp3",
-    }
+    },
 };
 
 const baseUrls = {
-    acoustic_grand_piano:
-        "https://tonejs.github.io/audio/salamander/",
-
-    electric_grand_piano:
-        "https://tonejs.github.io/audio/salamander/",
-
-    church_organ:
-        "https://tonejs.github.io/audio/Organ/",
-
-    finger_bass:
-        "https://tonejs.github.io/audio/bass-electric/",
-
-    rock_guitar:
-        "/rock_guitar/",
-
-    flute:
-        "https://tonejs.github.io/audio/flute/",
-
-    violin:
-        "https://tonejs.github.io/audio/violin/",
-
-    synth_bass:
-        "https://tonejs.github.io/audio/synth/",
-
-    string_ensemble:
-        "https://tonejs.github.io/audio/strings/",
-
-    trumpet:
-        "https://tonejs.github.io/audio/trumpet/"
+    acoustic_grand_piano:  "https://tonejs.github.io/audio/salamander/",
+    electric_grand_piano:  "https://tonejs.github.io/audio/salamander/",
+    church_organ:          "https://tonejs.github.io/audio/Organ/",
+    finger_bass:           "https://tonejs.github.io/audio/bass-electric/",
+    rock_guitar:           "/rock_guitar/",
+    flute:                 "https://tonejs.github.io/audio/flute/",
+    violin:                "https://tonejs.github.io/audio/violin/",
+    // Aliases: point to working CDN paths
+    synth_bass:            "https://tonejs.github.io/audio/bass-electric/",
+    string_ensemble:       "https://tonejs.github.io/audio/violin/",
+    trumpet:               "https://tonejs.github.io/audio/flute/",
 };
 
 
@@ -125,63 +105,69 @@ const baseUrls = {
  *
  * are completely independent voices.
  */
-async function loadInstrumentForTrack(
-    trackId,
-    instrument
-) {
+async function loadInstrumentForTrack(trackId, instrument) {
+    const existing = trackSamplers[trackId];
 
-    const existing =
-        trackSamplers[trackId];
-
-    /*
-     * Reuse sampler if this track is
-     * already using the requested instrument.
-     */
-    if (
-        existing &&
-        existing.instrument === instrument
-    ) {
+    // Fast path: sampler already loaded for this instrument — return immediately
+    if (existing && existing.instrument === instrument) {
         return existing.sampler;
     }
 
-
-    /*
-     * If this track previously had another
-     * instrument, dispose its sampler.
-     */
+    // Dispose old sampler if instrument changed
     if (existing) {
-
-        try {
-            existing.sampler.dispose();
-        }
-        catch (error) {
-            console.warn(
-                "Unable to dispose old sampler:",
-                error
-            );
-        }
+        try { existing.sampler.dispose(); }
+        catch (e) { console.warn("Could not dispose sampler:", e); }
     }
 
+    // Validate instrument — fall back to acoustic piano if unknown
+    const safeInstrument = (instrumentUrls[instrument] && baseUrls[instrument])
+        ? instrument
+        : "acoustic_grand_piano";
 
-    const sampler =
-        new Tone.Sampler({
-            urls: instrumentUrls[instrument],
-            baseUrl: baseUrls[instrument],
-            release: 0.1
-        });
+    const sampler = new Tone.Sampler({
+        urls:    instrumentUrls[safeInstrument],
+        baseUrl: baseUrls[safeInstrument],
+        release: 0.5,
+    });
 
+    // Wait for THIS sampler to load, not the global Tone.loaded().
+    // Tone.loaded() blocks all 7 parallel tracks on the slowest one.
+    await new Promise((resolve) => {
+        // Tone.js sets sampler.loaded = true synchronously in some edge cases
+        if (sampler.loaded) {
+            resolve();
+            return;
+        }
+        sampler.onload = resolve;
+        // Safety: resolve after 5s max so a 404 doesn't block forever
+        setTimeout(resolve, 5000);
+    });
 
-    await Tone.loaded();
-
-
-    trackSamplers[trackId] = {
-        sampler,
-        instrument
-    };
-
-
+    trackSamplers[trackId] = { sampler, instrument: safeInstrument };
     return sampler;
 }
+
+
+/**
+ * preWarmSamplers(tracks)
+ *
+ * Load all samplers for a track list in parallel BEFORE playback starts.
+ * Call this immediately after band generation so that when the user
+ * presses Play, all samplers are already loaded and the first beat
+ * fires instantly with no load latency.
+ *
+ * Returns a Promise that resolves when all samplers are loaded (or timed out).
+ */
+export async function preWarmSamplers(tracks) {
+    if (!Array.isArray(tracks) || tracks.length === 0) return;
+
+    await Promise.all(
+        tracks
+            .filter(t => t.instrument && !t.muted)
+            .map(t => loadInstrumentForTrack(t.id, t.instrument).catch(() => {}))
+    );
+}
+
 
 
 /*

@@ -282,27 +282,31 @@ const STYLE_PRESETS = {
   },
   rock: {
     label: "Rock",
-    instruments: { bass:"synth_bass",  piano:"electric_grand_piano", rhythm:"rock_guitar",          lead:"trumpet", pad:"string_ensemble",vocal:"trumpet" },
-    volumes:     { bass:0.8,           piano:0.78,                   rhythm:0.7,                   lead:0.62,      pad:0.56,             vocal:0.78      },
-    colors:      { bass:"#2D9CDB",     piano:"#9B51E0",              rhythm:"#F2994A",              lead:"#EB5757", pad:"#56CCF2",        vocal:"#FF7F50" },
+    // trumpet -> flute (working CDN), synth_bass -> finger_bass (working), string_ensemble -> violin (working)
+    instruments: { bass:"finger_bass", piano:"electric_grand_piano", rhythm:"rock_guitar",          lead:"flute",  pad:"violin",         vocal:"flute"  },
+    volumes:     { bass:0.82,          piano:0.78,                   rhythm:0.74,                  lead:0.65,     pad:0.58,             vocal:0.80     },
+    colors:      { bass:"#2D9CDB",     piano:"#9B51E0",              rhythm:"#F2994A",              lead:"#EB5757",pad:"#56CCF2",        vocal:"#FF7F50"},
   },
   cinematic: {
     label: "Cinematic",
-    instruments: { bass:"finger_bass", piano:"church_organ",         rhythm:"string_ensemble",      lead:"violin",  pad:"flute",          vocal:"violin"  },
-    volumes:     { bass:0.7,           piano:0.74,                   rhythm:0.6,                   lead:0.54,      pad:0.5,              vocal:0.7       },
-    colors:      { bass:"#6FCF97",     piano:"#A78BFA",              rhythm:"#BB6BD9",              lead:"#F2C94C", pad:"#56CCF2",        vocal:"#F72585" },
+    // string_ensemble -> violin (working)
+    instruments: { bass:"finger_bass", piano:"church_organ",         rhythm:"violin",               lead:"violin", pad:"flute",          vocal:"violin" },
+    volumes:     { bass:0.72,          piano:0.76,                   rhythm:0.62,                  lead:0.56,     pad:0.52,             vocal:0.72     },
+    colors:      { bass:"#6FCF97",     piano:"#A78BFA",              rhythm:"#BB6BD9",              lead:"#F2C94C",pad:"#56CCF2",        vocal:"#F72585"},
   },
   "lo-fi": {
     label: "Lo-fi",
-    instruments: { bass:"synth_bass",  piano:"electric_grand_piano", rhythm:"acoustic_grand_piano", lead:"flute",   pad:"violin",         vocal:"flute"   },
-    volumes:     { bass:0.68,          piano:0.7,                    rhythm:0.6,                   lead:0.45,      pad:0.42,             vocal:0.6       },
-    colors:      { bass:"#7F8C8D",     piano:"#9B59B6",              rhythm:"#D5A6BD",              lead:"#E67E22", pad:"#5DADE2",        vocal:"#FF9F1C" },
+    // synth_bass -> finger_bass (working)
+    instruments: { bass:"finger_bass", piano:"electric_grand_piano", rhythm:"acoustic_grand_piano", lead:"flute",  pad:"violin",         vocal:"flute"  },
+    volumes:     { bass:0.68,          piano:0.70,                   rhythm:0.60,                  lead:0.45,     pad:0.42,             vocal:0.60     },
+    colors:      { bass:"#7F8C8D",     piano:"#9B59B6",              rhythm:"#D5A6BD",              lead:"#E67E22",pad:"#5DADE2",        vocal:"#FF9F1C"},
   },
   jazz: {
     label: "Jazz",
-    instruments: { bass:"finger_bass", piano:"electric_grand_piano", rhythm:"church_organ",         lead:"trumpet", pad:"string_ensemble",vocal:"trumpet" },
-    volumes:     { bass:0.75,          piano:0.8,                    rhythm:0.66,                  lead:0.6,       pad:0.55,             vocal:0.72      },
-    colors:      { bass:"#34C759",     piano:"#8E7CC3",              rhythm:"#F1C40F",              lead:"#E67E22", pad:"#5DADE2",        vocal:"#FFB703" },
+    // trumpet -> flute (working), string_ensemble -> violin (working)
+    instruments: { bass:"finger_bass", piano:"electric_grand_piano", rhythm:"church_organ",         lead:"flute",  pad:"violin",         vocal:"flute"  },
+    volumes:     { bass:0.78,          piano:0.82,                   rhythm:0.68,                  lead:0.62,     pad:0.58,             vocal:0.74     },
+    colors:      { bass:"#34C759",     piano:"#8E7CC3",              rhythm:"#F1C40F",              lead:"#E67E22",pad:"#5DADE2",        vocal:"#FFB703"},
   },
   acoustic: {
     label: "Acoustic",
@@ -701,7 +705,12 @@ export function buildBandFromSong(
   if (enabled.bass)   tracks.push({ ...common(`${(safeSong.title||"Bass").split(" ")[0]} Bass`, stylePreset.instruments.bass,   stylePreset.volumes.bass,   songChords,  stylePreset.colors.bass,  "bass"),   theoryMeta });
   if (enabled.piano)  tracks.push({ ...common("Piano",                                          stylePreset.instruments.piano,  stylePreset.volumes.piano,  songChords,  stylePreset.colors.piano, "default"),theoryMeta });
   if (enabled.rhythm) tracks.push({ ...common("Rhythm",                                         stylePreset.instruments.rhythm, stylePreset.volumes.rhythm, leadPattern, stylePreset.colors.rhythm,"default"),theoryMeta });
-  if (enabled.drums)  tracks.push({ ...common("Drums / Percussion",                             stylePreset.instruments.rhythm, stylePreset.volumes.rhythm * 1.15, leadPattern, "#E17055",       "drums"),  theoryMeta });
+  if (enabled.drums)  tracks.push({ ...common("Drums / Percussion",
+    // Always use acoustic_grand_piano for drums — it's always loaded and provides
+    // a percussive attack. The drum PATTERN (boolean array) provides the rhythm;
+    // the instrument just needs a sharp transient, which piano delivers.
+    "acoustic_grand_piano",
+    stylePreset.volumes.rhythm * 1.1, leadPattern, "#E17055", "drums"),  theoryMeta });
   if (enabled.lead)   tracks.push({ ...common("Lead",                                           stylePreset.instruments.lead,   stylePreset.volumes.lead,   leadPattern, stylePreset.colors.lead,  "lead"),   theoryMeta });
   if (enabled.pad)    tracks.push({ ...common("Pad",                                            stylePreset.instruments.pad,    stylePreset.volumes.pad,    leadPattern, stylePreset.colors.pad,   "pad"),    theoryMeta });
   if (enabled.vocal)  tracks.push({ ...common("Mic / Vocal",                                    stylePreset.instruments.vocal,  stylePreset.volumes.vocal,  leadPattern, stylePreset.colors.vocal, "vocal"),  theoryMeta });

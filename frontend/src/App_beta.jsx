@@ -61,6 +61,7 @@ import {
     muteTrackAudio,
     soloTrackAudio,
     unsoloAllAudio,
+    preWarmSamplers,
 } from "./audio";
 
 import {
@@ -1204,11 +1205,9 @@ const playAllTracks = async () => {
         playbackId === playbackIdRef.current
     ) {
 
-        // Pause
+        // Pause — poll every 100ms, pass playbackId so the loop can exit if stopped
         if (pausedRef.current) {
-
-            await sleep(100);
-
+            await sleep(100, playbackId);
             continue;
         }
 
@@ -1555,8 +1554,8 @@ const startPlayback = async () => {
         return;
     }
 
-    await new Promise(resolve => setTimeout(resolve, 100));
-
+    // No artificial delay — samplers are pre-warmed after generation.
+    // Just ensure we're not double-starting.
     if (playingRef.current) {
         pausedRef.current = false;
         setIsPlaying(true);
@@ -1921,6 +1920,8 @@ const generateLocalBand = (song = importedSong, style = bandStyle) => {
     setSelectedTrack(demoBand[0]?.id ?? null);
     setTheoryMeta(demoBand[0]?.theoryMeta || null);
     setImportError("No valid song was imported, so a demo band was loaded instead.");
+    // Pre-warm all samplers in the background so first play is instant
+    preWarmSamplers(demoBand).catch(() => {});
     return;
   }
 
@@ -1932,6 +1933,8 @@ const generateLocalBand = (song = importedSong, style = bandStyle) => {
   setSelectedTrack(nextTracks[0]?.id ?? null);
   setTheoryMeta(nextTracks[0]?.theoryMeta || null);
   setImportError("");
+  // Pre-warm all samplers so first play fires instantly
+  preWarmSamplers(nextTracks).catch(() => {});
 };
 
 async function importSong() {
@@ -2144,6 +2147,7 @@ async function importSong() {
             setSelectedTrack(fresh[0]?.id ?? null);
             setTheoryMeta(fresh[0]?.theoryMeta || null);
             setImportError("Demo arrangement refreshed.");
+            preWarmSamplers(fresh).catch(() => {});
           }}
           sx={{ borderRadius:3, textTransform:"none", whiteSpace:"nowrap" }}
         >🎛 Refresh Demo</Button>
@@ -2806,7 +2810,9 @@ async function importSong() {
         flexDirection:"column",
         gap:20,
         width:"90%",
-        position:"relative"
+        maxWidth:1000,
+        position:"relative",
+        overflowX:"visible"
         }}
         >
 
@@ -2845,22 +2851,20 @@ async function importSong() {
 
         <div
         key={track.id}
-        onClick={()=>{
-            setSelectedTrack(track.id)
-            }}
+        onClick={()=>{ setSelectedTrack(track.id) }}
         style={{
             display:"flex",
-            alignItems:"center",
-            gap:15,
+            alignItems:"flex-start",
+            gap:10,
             padding:10,
             borderRadius:12,
             borderLeft:`6px solid ${track.color}`,
-            background:
-            selectedTrack === track.id
-            ? `${track.color}22`
-            : "transparent"
+            background: selectedTrack === track.id ? `${track.color}22` : "transparent",
+            // Allow the chord pill area to scroll while keeping controls visible
+            minWidth: 0,
+            flexWrap: "nowrap",
+            overflowX: "hidden",
         }}
-
         >
 
 
@@ -3070,7 +3074,10 @@ async function importSong() {
             style={{
             display:"flex",
             gap:10,
-            position:"relative"
+            position:"relative",
+            overflowX:"auto",
+            paddingBottom: 4,
+            WebkitOverflowScrolling: "touch"
             }}
             >
 
