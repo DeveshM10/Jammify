@@ -1291,6 +1291,8 @@ const playAllTracks = async () => {
 
                     volume: track.volume,
 
+                    instrument: track.instrument,
+
                     trackId: track.id,
 
                     state,
@@ -1995,10 +1997,11 @@ async function importSong() {
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        gap: 30,
-        padding: 20,
+        gap: "max(20px, 5vw)",
+        padding: "max(12px, 4vw)",
         boxSizing: "border-box",
-        background: colors.background
+        background: colors.background,
+        overflow: "hidden",
       }}
 
     >
@@ -2028,14 +2031,14 @@ async function importSong() {
             display: "flex",
             flexDirection: "column",
             gap: 12,
-            width: "90%",
+            width: window.innerWidth < 768 ? "95%" : "90%",
             maxWidth: 900,
         }}
     >
       {/* Row 1: URL input + Import button + Style picker */}
-      <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+      <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap: window.innerWidth < 640 ? "wrap" : "wrap", flexDirection: window.innerWidth < 640 ? "column" : "row" }}>
         <TextField
-            style={{ flex:1, minWidth:220 }}
+            style={{ flex:1, minWidth: window.innerWidth < 640 ? "100%" : 220 }}
             size="small"
             label="Ultimate Guitar URL"
             placeholder="Paste Ultimate Guitar song URL here"
@@ -2047,7 +2050,7 @@ async function importSong() {
             variant="contained"
             onClick={importSong}
             disabled={!songUrl.trim() || importing}
-            sx={{ backgroundColor: colors.primary, borderRadius: 3, textTransform:"none", whiteSpace:"nowrap" }}
+            sx={{ backgroundColor: colors.primary, borderRadius: 3, textTransform:"none", whiteSpace:"nowrap", flex: window.innerWidth < 640 ? "1 1 100%" : "0 1 auto" }}
         >
             {importing ? "Importing..." : "🎵 Import"}
         </Button>
@@ -2057,7 +2060,7 @@ async function importSong() {
             label="Band style"
             value={bandStyle}
             onChange={(e) => setBandStyle(e.target.value)}
-            sx={{ minWidth: 140 }}
+            sx={{ minWidth: window.innerWidth < 640 ? "100%" : 140 }}
         >
             {styleOptions.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
         </TextField>
@@ -2805,7 +2808,7 @@ async function importSong() {
         display:"flex",
         flexDirection:"column",
         gap:20,
-        width:"90%",
+        width: window.innerWidth < 768 ? "95%" : "90%",
         maxWidth:1000,
         position:"relative",
         overflowX:"visible"
@@ -2850,16 +2853,16 @@ async function importSong() {
         onClick={()=>{ setSelectedTrack(track.id) }}
         style={{
             display:"flex",
-            alignItems:"flex-start",
+            flexDirection: window.innerWidth < 768 ? "column" : "row",
+            alignItems: window.innerWidth < 768 ? "stretch" : "flex-start",
             gap:10,
             padding:10,
             borderRadius:12,
             borderLeft:`6px solid ${track.color}`,
             background: selectedTrack === track.id ? `${track.color}22` : "transparent",
-            // Allow the chord pill area to scroll while keeping controls visible
             minWidth: 0,
-            flexWrap: "nowrap",
-            overflowX: "hidden",
+            flexWrap: "wrap",
+            overflowX: "auto",
         }}
         >
 
@@ -2904,7 +2907,7 @@ async function importSong() {
                     changeTrackInstrument(track.id, e.target.value);
                 }}
                 sx={{
-                    minWidth: 170,
+                    minWidth: window.innerWidth < 768 ? "100%" : 170,
                     backgroundColor: "white",
                     borderRadius: 1
                 }}
