@@ -189,9 +189,13 @@ export async function unlockAudio() {
  * MIDI -> note.
  */
 function midiToNote(midi) {
+    const value = Number(midi);
+    if (!Number.isFinite(value) || value < 0 || value > 127) {
+        return null;
+    }
 
     return Tone.Frequency(
-        midi,
+        value,
         "midi"
     ).toNote();
 }
@@ -286,11 +290,20 @@ export async function playChord(
     /*
      * Load the sampler for this track.
      */
-    const sampler =
-        await loadInstrumentForTrack(
+    let sampler;
+    try {
+        sampler = await loadInstrumentForTrack(
             trackId,
             instrument
         );
+    } catch (error) {
+        console.warn("Sampler load failed:", error);
+        return;
+    }
+
+    if (!sampler) {
+        return;
+    }
 
 
     /*
@@ -352,9 +365,13 @@ export async function playChord(
      * note names.
      */
     const noteNames =
-        notes.map(
-            midiToNote
-        );
+        notes
+            .map(midiToNote)
+            .filter(Boolean);
+
+    if (noteNames.length === 0) {
+        return;
+    }
 
 
     /*
@@ -380,6 +397,7 @@ export async function playChord(
      * notes[0] is assumed to be the
      * lowest/bass note of the chord.
      */
+    try {
     if (normalizedSpeed === 0) {
 
         sampler.triggerAttackRelease(
@@ -518,6 +536,10 @@ export async function playChord(
             }
         );
 
+    }
+    } catch (error) {
+        console.warn("Unable to trigger notes:", error);
+        return;
     }
 
 

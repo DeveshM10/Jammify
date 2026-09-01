@@ -11,7 +11,7 @@ from metronome import set_tempo, BPM, BEATS_PER_BAR
 
 from song_chord_importer import import_chords_from_url
 from supabase_service import save_jam_to_supabase, load_jams_from_supabase
-
+from ai_arranger import build_band_plan
 
 
 class TempoSettings(BaseModel):
@@ -37,6 +37,10 @@ class SaveJamRequest(BaseModel):
     song_id: str | None = None
     user_id: str | None = None
 
+class BandPlanRequest(BaseModel):
+    chords: list[str] = []
+    style: str = "pop"
+
 app = FastAPI()
 
 '''
@@ -61,6 +65,11 @@ app.add_middleware(
 @app.get("/")
 def root():
     return {"message": "Jammify API is running"}
+
+
+@app.get("/health")
+def health():
+    return {"ok": True, "service": "jammify-api"}
 
 
 @app.get("/play")
@@ -160,6 +169,15 @@ def import_chords(request: ImportChordsRequest):
             status_code=500,
             detail=str(e)
         )
+
+
+@app.post("/generate-band-plan")
+@app.post("/ai-band-plan")
+def generate_band_plan(request: BandPlanRequest):
+    try:
+        return build_band_plan(request.chords, request.style)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/save-jam")

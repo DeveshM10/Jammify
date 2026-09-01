@@ -78,6 +78,7 @@ import { openCamera, captureFrame, extractChords as ocrExtractChords, stopCamera
 import { parseMood } from "./moodParser";
 import { queryOllama, isOllamaAvailable } from "./ollamaClient";
 import LiveJamPad from "./LiveJamPad";
+import { apiJson } from "./api";
 
 
 const instrumentCatalog = [
@@ -380,9 +381,6 @@ function SortableChord({
 
 
 function App() {
-
-
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
     
     const colors = {
     background: "#F7F5FF",
@@ -992,39 +990,36 @@ const saveTempo = async () => {
     setBpm(finalBpm);
     setBeatsPerBar(finalBeats);
 
-    // await fetch("http://localhost:8000/tempo", {
-    await fetch(`${API_URL}/tempo`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            bpm: finalBpm,
-            beats_per_bar: finalBeats
-        })
-    });
+    try {
+        await apiJson("/tempo", {
+            method: "POST",
+            body: JSON.stringify({
+                bpm: finalBpm,
+                beats_per_bar: finalBeats
+            }),
+            timeoutMs: 8000,
+        });
+    } catch (error) {
+        console.warn("Tempo sync skipped:", error);
+    }
 
     setTempoDialogOpen(false);
 };
 
 
 const itemToMidi = (item) => {
+    try {
+        const raw = item.type === "note"
+            ? [noteToMidi(item.name, item.octave)]
+            : chordToMidi(item.name, item.octave, item.inversion);
 
-    if (item.type === "note") {
-
-        return noteToMidi(
-            item.name,
-            item.octave,
+        return (Array.isArray(raw) ? raw : [raw]).filter(
+            (value) => Number.isFinite(Number(value))
         );
-
+    } catch (error) {
+        console.warn("MIDI conversion failed:", item?.name, error);
+        return [];
     }
-
-    return chordToMidi(
-        item.name,
-        item.octave,
-        item.inversion
-    );
-
 };
 
 const playStep = async (chords, playbackId) => {
@@ -1252,12 +1247,12 @@ const playAllTracks = async () => {
 
 
         const currentTrackIds = new Set(
-            tracksRef.current.map(track => track.id)
+            tracksRef.current.map(track => String(track.id))
         );
 
         Object.keys(playbackStateRef.current).forEach(id => {
 
-            if (!currentTrackIds.has(Number(id))) {
+            if (!currentTrackIds.has(String(id))) {
                 delete playbackStateRef.current[id];
             }
 
@@ -1470,46 +1465,32 @@ const playAllTracks = async () => {
         }
 
 
-        setTrackPlayheads(prev => {
-
-            const next = { ...prev };
-
-            tracksRef.current.forEach(track => {
-
-                const state =
-                    playbackStateRef.current[track.id];
-
-                if (!state) {
-                    next[track.id] = 0;
-                    return;
-                }
-
-                next[track.id] =
-                    state.step;
-            });
-
-            const liveSteps = Object.values(playbackStateRef.current)
-                .filter(state => {
-                    const track = tracksRef.current.find(t => t.id === state.trackId);
-                    return !!track && !track.muted;
-                })
-                .map(state => state.step);
-
-            if (liveSteps.length > 0) {
-                const minStep = Math.min(...liveSteps);
-                setProgressionIndex(minStep);
-
-                const firstTrack = tracksRef.current[0];
-                if (firstTrack?.sectionLabels && firstTrack.chords[minStep]) {
-                    const totalChords = firstTrack.chords.length;
-                    const chordLength = Math.ceil(totalChords / (firstTrack.sectionLabels.length || 1));
-                    const sectionIdx = Math.floor(minStep / chordLength);
-                    setCurrentSection(firstTrack.sectionLabels[sectionIdx] || null);
-                }
-            }
-
-            return next;
+        const nextPlayheads = {};
+        tracksRef.current.forEach(track => {
+            const state = playbackStateRef.current[track.id];
+            nextPlayheads[track.id] = state ? state.step : 0;
         });
+        setTrackPlayheads(nextPlayheads);
+
+        const liveSteps = Object.values(playbackStateRef.current)
+            .filter(state => {
+                const track = tracksRef.current.find(t => t.id === state.trackId);
+                return !!track && !track.muted;
+            })
+            .map(state => state.step);
+
+        if (liveSteps.length > 0) {
+            const minStep = Math.min(...liveSteps);
+            setProgressionIndex(minStep);
+
+            const firstTrack = tracksRef.current[0];
+            if (firstTrack?.sectionLabels && firstTrack.chords[minStep]) {
+                const totalChords = firstTrack.chords.length;
+                const chordLength = Math.ceil(totalChords / (firstTrack.sectionLabels.length || 1));
+                const sectionIdx = Math.floor(minStep / chordLength);
+                setCurrentSection(firstTrack.sectionLabels[sectionIdx] || null);
+            }
+        }
 
 
     }
@@ -1674,19 +1655,10 @@ const saveCurrentJam = async () => {
     setSavingJam(true);
 
     try {
-        const response = await fetch(`${API_URL}/save-jam`, {
+        const data = await apiJson("/save-jam", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
             body: JSON.stringify(payload),
         });
-
-        const data = await response.json();
-
-        if (!response.ok || data?.success === false) {
-            throw new Error(data?.detail || data?.error || "Could not save the jam.");
-        }
 
         const savedRecord = Array.isArray(data?.data) ? data.data[0] : data?.data;
         if (savedRecord) {
@@ -1707,15 +1679,9 @@ const loadSavedJams = async () => {
     setLoadingJams(true);
 
     try {
-        const response = await fetch(`${API_URL}/load-jams`, {
+        const data = await apiJson("/load-jams", {
             method: "GET",
         });
-
-        const data = await response.json();
-
-        if (!response.ok || data?.success === false) {
-            throw new Error(data?.detail || data?.error || "Could not load saved jams.");
-        }
 
         const items = Array.isArray(data?.data) ? data.data : [];
         setSavedJams(items);
@@ -1898,6 +1864,7 @@ const handleParseMood = async () => {
       arrangementDensity: result.config.arrangementDensity,
     });
     if (result.config.bpm) setBpm(String(result.config.bpm));
+    generateLocalBand(importedSong, result.config.style);
   } catch (err) {
     setImportError("Mood parsing failed: " + (err.message || ""));
   } finally {
@@ -1912,30 +1879,71 @@ const handleJamRecordComplete = (newTrack) => {
   setJamPadOpen(false);
 };
 
-const generateLocalBand = (song = importedSong, style = bandStyle) => {
-  if (!song || !Array.isArray(song.chords) || song.chords.length === 0) {
-    const demoBand = buildDemoBand(style, aiBandSelection, aiProducerSettings, arrangementPreset);
+const generateLocalBand = async (song = importedSong, style = bandStyle, statusMessage) => {
+  try {
     stopProgression();
-    setTracks(demoBand);
-    setSelectedTrack(demoBand[0]?.id ?? null);
-    setTheoryMeta(demoBand[0]?.theoryMeta || null);
-    setImportError("No valid song was imported, so a demo band was loaded instead.");
-    // Pre-warm all samplers in the background so first play is instant
-    preWarmSamplers(demoBand).catch(() => {});
-    return;
+
+    const hasSong = song && Array.isArray(song.chords) && song.chords.length > 0;
+
+    let plan = null;
+    let nextTracks = null;
+
+    if (hasSong) {
+      try {
+        const chordNames = song.chords
+          .map((entry) => entry?.name || entry)
+          .filter(Boolean);
+
+        plan = await apiJson("/generate-band-plan", {
+          method: "POST",
+          body: JSON.stringify({
+            chords: chordNames,
+            style,
+          }),
+          timeoutMs: 20000,
+        });
+      } catch (apiError) {
+        console.warn("Backend band plan unavailable, using local arranger fallback:", apiError);
+      }
+    }
+
+    nextTracks = hasSong
+      ? buildBandFromSong(song, style, aiBandSelection, aiProducerSettings, arrangementPreset)
+      : buildDemoBand(style, aiBandSelection, aiProducerSettings, arrangementPreset);
+
+    if (!Array.isArray(nextTracks) || nextTracks.length === 0) {
+      throw new Error("The arranger returned no tracks.");
+    }
+
+    setTracks(nextTracks);
+    setSelectedTrack(nextTracks[0]?.id ?? null);
+    setTheoryMeta(
+      plan
+        ? {
+            summary: plan.summary,
+            style: plan.style,
+            sections: plan.sections,
+            source: "local-ai",
+          }
+        : (nextTracks[0]?.theoryMeta || null)
+    );
+
+    if (statusMessage !== undefined) {
+      setImportError(statusMessage);
+    } else {
+      setImportError(hasSong ? (plan ? "AI arrangement generated locally." : "") : "Demo band loaded. Paste an Ultimate Guitar URL to replace it.");
+    }
+    preWarmSamplers(nextTracks).catch(() => {});
+  } catch (error) {
+    console.error(error);
+    setImportError("Band generation failed: " + (error.message || "unknown error"));
   }
-
-  stopProgression();
-
-  const nextTracks = buildBandFromSong(song, style, aiBandSelection, aiProducerSettings, arrangementPreset);
-
-  setTracks(nextTracks);
-  setSelectedTrack(nextTracks[0]?.id ?? null);
-  setTheoryMeta(nextTracks[0]?.theoryMeta || null);
-  setImportError("");
-  // Pre-warm all samplers so first play fires instantly
-  preWarmSamplers(nextTracks).catch(() => {});
 };
+
+useEffect(() => {
+  generateLocalBand(null, "pop", "");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
 async function importSong() {
   if (!songUrl.trim()) return;
@@ -1944,26 +1952,13 @@ async function importSong() {
   setImportError("");
 
   try {
-    const response = await fetch(
-      `${API_URL}/import-song`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          url: songUrl,
-        }),
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok || data.error) {
-      throw new Error(
-        data.error || "Failed to import song"
-      );
-    }
+    const data = await apiJson("/import-song", {
+      method: "POST",
+      body: JSON.stringify({
+        url: songUrl,
+      }),
+      timeoutMs: 30000,
+    });
 
     setImportedSong(data);
     generateLocalBand(data);
@@ -1971,8 +1966,10 @@ async function importSong() {
   } catch (error) {
     console.error(error);
 
-    setImportError(
-      error.message || "Failed to import song"
+    generateLocalBand(
+      null,
+      bandStyle,
+      (error.message || "Failed to import song") + " — loaded a demo band so you can still play."
     );
 
   } finally {
@@ -2135,7 +2132,6 @@ async function importSong() {
 
         <Button variant="contained"
           onClick={() => generateLocalBand(importedSong, bandStyle)}
-          disabled={!importedSong || !Array.isArray(importedSong?.chords) || importedSong.chords.length === 0}
           sx={{ borderRadius:3, textTransform:"none", whiteSpace:"nowrap", backgroundColor:colors.primary }}
         >🤖 Generate Band</Button>
 
@@ -2533,7 +2529,7 @@ async function importSong() {
             }}
 
             disabled={
-                tracks.every(track => track.chords.length === 0)
+                !tracks.some(track => Array.isArray(track.chords) && track.chords.length > 0)
             }
 
 

@@ -318,8 +318,10 @@ const STYLE_PRESETS = {
 
 export const DEFAULT_AI_BAND_SELECTION = {
   bass: true, piano: true, rhythm: true,
-  lead: true, pad: true, drums: true, vocal: true,
+  lead: false, pad: false, drums: true, vocal: false,
 };
+
+const MAX_ARRANGEMENT_CHORDS = 32;
 
 export const aiBandInstrumentOptions = [
   { key:"bass",  label:"Bass"       },
@@ -359,7 +361,7 @@ function makeTrack(
   producerSettings = {}, arrangementPreset = "radio",
   chordAnalyses = [], tonic = "C", mode = "major"
 ) {
-  const trackId  = Date.now() + Math.random() + Math.random();
+  const trackId = `${String(name || "track").replace(/\s+/g, "-").toLowerCase()}-${preset}-${Math.random().toString(36).slice(2, 9)}`;
 
   const energy    = Math.min(1, Math.max(0, Number(producerSettings.energy    ?? 75) / 100));
   const vocalInt  = Math.min(1, Math.max(0, Number(producerSettings.vocalIntensity ?? 70) / 100));
@@ -440,7 +442,7 @@ function makeTrack(
         type:"chord", name: chord.name || "C",
         octave:4, inversion:0,
         beats: beatLength,
-        repeat: isRepeat ? 0 : 1,   // 0 = sustain the previous note, don't re-attack
+        repeat: 1,
         wait:0, speed:1,
         instrument, volume: effectiveVolume,
         pattern:[true], trackId,
@@ -654,7 +656,7 @@ export function buildBandFromSong(
       ]};
 
   // Preserve imported beat durations; mark them so makeTrack can use them
-  const songChords = safeSong.chords.map((chord, i) => ({
+  const songChords = safeSong.chords.slice(0, MAX_ARRANGEMENT_CHORDS).map((chord, i) => ({
     ...chord,
     name:          chord.name || "C",
     // Store original beats as importedBeats; fall back to musical default
