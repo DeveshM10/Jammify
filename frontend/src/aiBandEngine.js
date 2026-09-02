@@ -273,10 +273,16 @@ function getArrangementFill(index, sections = [], preset = "radio") {
 
 // ─── Style presets ────────────────────────────────────────────────────────────
 
-const STYLE_PRESETS = {
+export const STYLE_PRESETS = {
   pop: {
-    label: "Pop",
-    instruments: { bass:"finger_bass", piano:"acoustic_grand_piano", rhythm:"church_organ",        lead:"violin",     pad:"flute",          vocal:"electric_grand_piano" },
+    instruments: {
+      bass:   "finger_bass",
+      piano:  "acoustic_grand_piano",
+      rhythm: "rock_guitar",
+      lead:   "flute",
+      pad:    "church_organ",
+      vocal:  "violin"
+    },
     volumes:     { bass:0.72,          piano:0.82,                   rhythm:0.68,                  lead:0.58,         pad:0.52,             vocal:0.74      },
     colors:      { bass:"#00B894",     piano:"#6D4AFF",              rhythm:"#FDCB6E",              lead:"#FF6B8A",    pad:"#0984E3",        vocal:"#FF4D9D" },
   },
@@ -719,7 +725,7 @@ export function buildBandFromSong(
   if (enabled.bass)   tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.bass),   stylePreset.instruments.bass,   stylePreset.volumes.bass,   songChords,  stylePreset.colors.bass,  "bass"),   theoryMeta });
   if (enabled.piano)  tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.piano),  stylePreset.instruments.piano,  stylePreset.volumes.piano,  songChords,  stylePreset.colors.piano, "default"),theoryMeta });
   if (enabled.rhythm) tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.rhythm), stylePreset.instruments.rhythm, stylePreset.volumes.rhythm, leadPattern, stylePreset.colors.rhythm,"default"),theoryMeta });
-  if (enabled.drums)  tracks.push({ ...common("Drums (Piano Hits)", "acoustic_grand_piano",       stylePreset.volumes.rhythm * 1.1, leadPattern, "#E17055", "drums"),  theoryMeta });
+  if (enabled.drums)  tracks.push({ ...common("Drums", "drums",       stylePreset.volumes.rhythm * 1.1, leadPattern, "#E17055", "drums"),  theoryMeta });
   if (enabled.lead)   tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.lead),   stylePreset.instruments.lead,   stylePreset.volumes.lead,   leadPattern, stylePreset.colors.lead,  "lead"),   theoryMeta });
   if (enabled.pad)    tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.pad),    stylePreset.instruments.pad,    stylePreset.volumes.pad,    leadPattern, stylePreset.colors.pad,   "pad"),    theoryMeta });
   if (enabled.vocal)  tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.vocal),  stylePreset.instruments.vocal,  stylePreset.volumes.vocal,  leadPattern, stylePreset.colors.vocal, "vocal"),  theoryMeta });

@@ -105,6 +105,21 @@ export async function loadInstrumentForTrack(trackId, instrument) {
         return existing.sampler;
     }
 
+    if (instrument === "drums") {
+        const drumSynth = new Tone.MembraneSynth({
+            pitchDecay: 0.05,
+            octaves: 4,
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4 }
+        });
+        
+        if (existing) {
+            try { existing.sampler.dispose(); } catch (e) {}
+        }
+        trackSamplers[trackId] = { sampler: drumSynth, instrument: "drums" };
+        return drumSynth;
+    }
+
     const safeInstrument = (instrumentUrls[instrument] && baseUrls[instrument])
         ? instrument
         : "acoustic_grand_piano";
