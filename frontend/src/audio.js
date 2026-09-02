@@ -81,70 +81,112 @@ const instrumentUrls = {
 const baseUrls = {
     acoustic_grand_piano:  "https://tonejs.github.io/audio/salamander/",
     electric_grand_piano:  "https://tonejs.github.io/audio/salamander/",
-    church_organ:          "https://tonejs.github.io/audio/Organ/",
-    finger_bass:           "https://tonejs.github.io/audio/bass-electric/",
+    church_organ:          "/church_organ/",
+    finger_bass:           "/acoustic_bass/",
     rock_guitar:           "/rock_guitar/",
-    flute:                 "https://tonejs.github.io/audio/flute/",
-    violin:                "https://tonejs.github.io/audio/violin/",
-    // Aliases: point to working CDN paths
-    synth_bass:            "https://tonejs.github.io/audio/bass-electric/",
-    string_ensemble:       "https://tonejs.github.io/audio/violin/",
-    trumpet:               "https://tonejs.github.io/audio/flute/",
+    flute:                 "/flute/",
+    violin:                "/violin/",
+    // Aliases: point to local paths
+    synth_bass:            "/acoustic_bass/",
+    string_ensemble:       "/violin/",
+    trumpet:               "/flute/",
 };
 
 
 /*
  * IMPORTANT:
- *
- * Each TRACK gets its own Sampler.
- *
- * This means:
- *
- * Track 1 piano
- * Track 2 piano
- *
- * are completely independent voices.
+ * Each TRACK gets its own Sampler or Synth.
  */
-async function loadInstrumentForTrack(trackId, instrument) {
+export async function loadInstrumentForTrack(trackId, instrument) {
     const existing = trackSamplers[trackId];
 
-    // Fast path: sampler already loaded for this instrument — return immediately
+    // Fast path: already loaded for this instrument
     if (existing && existing.instrument === instrument) {
         return existing.sampler;
     }
 
-    // Dispose old sampler if instrument changed
-    if (existing) {
-        try { existing.sampler.dispose(); }
-        catch (e) { console.warn("Could not dispose sampler:", e); }
-    }
-
-    // Validate instrument — fall back to acoustic piano if unknown
     const safeInstrument = (instrumentUrls[instrument] && baseUrls[instrument])
         ? instrument
         : "acoustic_grand_piano";
 
-    const sampler = new Tone.Sampler({
+    let newSampler;
+    let loadFailed = false;
+
+    // Create new sampler
+    newSampler = new Tone.Sampler({
         urls:    instrumentUrls[safeInstrument],
         baseUrl: baseUrls[safeInstrument],
         release: 0.5,
     });
 
-    // Wait for THIS sampler to load, not the global Tone.loaded().
-    // Tone.loaded() blocks all 7 parallel tracks on the slowest one.
+    // Wait for the NEW sampler to load completely
     await new Promise((resolve) => {
-        // Tone.js sets sampler.loaded = true synchronously in some edge cases
-        if (sampler.loaded) {
+        if (newSampler.loaded) {
             resolve();
             return;
         }
-        sampler.onload = resolve;
-        // Safety: resolve after 5s max so a 404 doesn't block forever
-        setTimeout(resolve, 5000);
+        newSampler.onload = resolve;
+        // Safety: resolve after 2s max so a 404 doesn't block forever
+        setTimeout(() => {
+            if (!newSampler.loaded) {
+                loadFailed = true;
+            }
+            resolve();
+        }, 2000);
     });
 
-    trackSamplers[trackId] = { sampler, instrument: safeInstrument };
-    return sampler;
+    // If it failed to load from CDN, create a fallback Synth instead of going silent
+    if (loadFailed) {
+        newSampler.dispose();
+        
+        // Pick a synth based on the requested instrument
+        if (instrument.includes("bass")) {
+            newSampler = new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 0.5,
+                modulationIndex: 1.2,
+                oscillator: { type: "triangle" },
+                envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 1.5 },
+            });
+        } else if (instrument.includes("organ")) {
+            newSampler = new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 2,
+                modulationIndex: 0.5,
+                oscillator: { type: "sine" },
+                envelope: { attack: 0.05, decay: 0.1, sustain: 0.8, release: 1 },
+            });
+        } else if (instrument.includes("guitar")) {
+            newSampler = new Tone.PolySynth(Tone.PluckSynth, {
+                attackNoise: 1,
+                dampening: 4000,
+                resonance: 0.7
+            });
+        } else if (instrument.includes("flute") || instrument.includes("violin")) {
+            newSampler = new Tone.PolySynth(Tone.AMSynth, {
+                harmonicity: 1.5,
+                oscillator: { type: "triangle" },
+                envelope: { attack: 0.1, decay: 0.1, sustain: 0.5, release: 1 },
+            });
+        } else {
+            newSampler = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "sawtooth" },
+                envelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 1 },
+            });
+        }
+    }
+
+    // Only NOW dispose the old sampler (after new one is ready)
+    if (existing) {
+        try { 
+            existing.sampler.dispose(); 
+        }
+        catch (e) { 
+            console.warn("Could not dispose old sampler:", e); 
+        }
+    }
+
+    // Store the new sampler/synth
+    trackSamplers[trackId] = { sampler: newSampler, instrument: safeInstrument };
+    return newSampler;
 }
 
 

@@ -62,6 +62,7 @@ import {
     soloTrackAudio,
     unsoloAllAudio,
     preWarmSamplers,
+    loadInstrumentForTrack,
 } from "./audio";
 
 import {
@@ -431,6 +432,7 @@ function App() {
   const [bandStyle, setBandStyle] = useState("pop");
   const [arrangementPreset, setArrangementPreset] = useState("radio");
   const [aiBandSelection, setAiBandSelection] = useState(DEFAULT_AI_BAND_SELECTION);
+  const [userInstrument, setUserInstrument] = useState("nothing"); // Track what the user plays
   const [aiProducerSettings, setAiProducerSettings] = useState({
     energy: 74,
     vocalIntensity: 68,
@@ -584,7 +586,8 @@ const changeTrackVolume = (id, volume) => {
     updateAudioTrackVolume(id, volume);
 };
 
-const changeTrackInstrument = (id, instrument) => {
+const changeTrackInstrument = async (id, instrument) => {
+    // First, update the track data
     setTracks(prev =>
         prev.map(track =>
             track.id === id
@@ -595,6 +598,16 @@ const changeTrackInstrument = (id, instrument) => {
                 : track
         )
     );
+
+    // If currently playing, immediately preload the new instrument
+    // The improved loadInstrumentForTrack will handle hot-swapping smoothly
+    if (playingRef.current) {
+        try {
+            await loadInstrumentForTrack(id, instrument);
+        } catch (error) {
+            console.warn("Failed to switch instrument:", error);
+        }
+    }
 };
 
 const addTrack = () => {
@@ -1885,14 +1898,23 @@ const generateLocalBand = async (song = importedSong, style = bandStyle, statusM
   try {
     stopProgression();
 
-    const hasSong = song && Array.isArray(song.chords) && song.chords.length > 0;
+    let activeSong = song;
+    // If no song is imported, but the user has manually edited chords in the first track, use those chords.
+    if ((!activeSong || !Array.isArray(activeSong.chords) || activeSong.chords.length === 0) && tracks.length > 0 && tracks[0].chords && tracks[0].chords.length > 0) {
+        activeSong = {
+            title: "My Jam",
+            chords: tracks[0].chords.map(c => ({ name: c.name, beats: c.beats }))
+        };
+    }
+
+    const hasSong = activeSong && Array.isArray(activeSong.chords) && activeSong.chords.length > 0;
 
     let plan = null;
     let nextTracks = null;
 
     if (hasSong) {
       try {
-        const chordNames = song.chords
+        const chordNames = activeSong.chords
           .map((entry) => entry?.name || entry)
           .filter(Boolean);
 
@@ -1910,7 +1932,7 @@ const generateLocalBand = async (song = importedSong, style = bandStyle, statusM
     }
 
     nextTracks = hasSong
-      ? buildBandFromSong(song, style, aiBandSelection, aiProducerSettings, arrangementPreset)
+      ? buildBandFromSong(activeSong, style, aiBandSelection, aiProducerSettings, arrangementPreset)
       : buildDemoBand(style, aiBandSelection, aiProducerSettings, arrangementPreset);
 
     if (!Array.isArray(nextTracks) || nextTracks.length === 0) {
@@ -1989,21 +2011,20 @@ async function importSong() {
   return (
 
     <div
-
       style={{
         width: "100vw",
         minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "center",
         alignItems: "center",
         gap: "max(20px, 5vw)",
         padding: "max(12px, 4vw)",
+        paddingBottom: "100px", // space for bottom controls
         boxSizing: "border-box",
         background: colors.background,
-        overflow: "hidden",
+        overflowX: "hidden",
+        overflowY: "auto",
       }}
-
     >
 
     {/* Song Import */}
@@ -2086,27 +2107,119 @@ async function importSong() {
         ))}
       </div>
 
-      {/* Row 3: Instrument toggles */}
-      <div style={{ display:"flex", flexWrap:"wrap", gap:8, alignItems:"center" }}>
-        <span style={{ fontSize:12, fontWeight:700, color:colors.text, opacity:0.6, marginRight:4 }}>Tracks:</span>
-        {aiBandInstrumentOptions.map((option) => {
-          const active = !!aiBandSelection[option.key];
-          return (
-            <Button
-              key={option.key}
-              variant={active ? "contained" : "outlined"}
-              size="small"
-              onClick={() => setAiBandSelection(prev => ({ ...prev, [option.key]: !prev[option.key] }))}
-              sx={{
-                borderRadius:999, minWidth:0, px:1.5, py:0.5,
-                textTransform:"none", fontSize:12,
-                backgroundColor: active ? colors.primary : "transparent",
-                borderColor: colors.border,
-                color: active ? "white" : colors.text,
-              }}
-            >{option.label}</Button>
-          );
-        })}
+      {/* Row 3: Choose Your Band */}
+      <div style={{ display:"flex", flexDirection:"column", gap:12, background:"rgba(16,24,40,0.4)", borderRadius:12, padding:"16px" }}>
+        
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ fontSize:14, fontWeight:700, color:colors.text }}>🎵 Choose Your Band</span>
+          <span style={{ fontSize:11, color:colors.text, opacity:0.6 }}>Pick what you play + what AI plays</span>
+        </div>
+        
+        {/* User Instrument Section */}
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          <span style={{ fontSize:12, fontWeight:600, color:colors.text, opacity:0.8 }}>What do YOU play?</span>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+            {["drums", "bass_guitar", "rhythm_guitar", "lead_guitar", "piano", "keyboards", "vocals", "nothing"].map((instrument) => (
+              <Button
+                key={instrument}
+                variant={userInstrument === instrument ? "contained" : "outlined"}
+                size="small"
+                onClick={() => {
+                  setUserInstrument(instrument);
+                  
+                  // Auto-update AI band selection based on user's choice
+                  if (instrument !== "nothing") {
+                    setAiBandSelection(prev => {
+                      const updated = { ...prev };
+                      if (instrument === "drums") updated.drums = false;
+                      if (instrument === "bass_guitar") updated.bass = false;
+                      if (instrument === "rhythm_guitar") updated.rhythm = false;
+                      if (instrument === "lead_guitar") updated.lead = false;
+                      if (instrument === "piano" || instrument === "keyboards") updated.piano = false;
+                      if (instrument === "vocals") updated.vocal = false;
+                      return updated;
+                    });
+                  }
+                }}
+                sx={{
+                  borderRadius:999, minWidth:0, px:2, py:0.5,
+                  textTransform:"none", fontSize:11,
+                  backgroundColor: userInstrument === instrument ? colors.primary : "transparent",
+                  borderColor: colors.border,
+                  color: userInstrument === instrument ? "white" : colors.text,
+                }}
+              >
+                {instrument === "nothing" ? "Just Listen" : 
+                 instrument === "bass_guitar" ? "Bass" :
+                 instrument === "rhythm_guitar" ? "Rhythm Guitar" :
+                 instrument === "lead_guitar" ? "Lead Guitar" :
+                 instrument.charAt(0).toUpperCase() + instrument.slice(1)}
+              </Button>
+            ))}
+          </div>
+        </div>
+        
+        {/* AI Band Section */}
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          <span style={{ fontSize:12, fontWeight:600, color:colors.text, opacity:0.8 }}>What should the AI band play?</span>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+            {[
+              { key:"bass", label:"Bass Guitar", icon:"🎸" },
+              { key:"piano", label:"Piano", icon:"🎹" },
+              { key:"guitar", label:"Guitar", icon:"🎸" },
+              { key:"drums", label:"Drums", icon:"🥁" },
+              { key:"organ", label:"Organ", icon:"🎹" },
+              { key:"violin", label:"Violin", icon:"🎻" },
+              { key:"flute", label:"Flute", icon:"🎺" }
+            ].map((option) => {
+              // Map to the existing aiBandSelection structure
+              const active = option.key === "bass" ? !!aiBandSelection.bass :
+                           option.key === "piano" ? !!aiBandSelection.piano :
+                           option.key === "guitar" ? !!aiBandSelection.rhythm :
+                           option.key === "drums" ? !!aiBandSelection.drums :
+                           option.key === "organ" ? !!aiBandSelection.lead :
+                           option.key === "violin" ? !!aiBandSelection.pad :
+                           option.key === "flute" ? !!aiBandSelection.vocal :
+                           false;
+              
+              return (
+                <Button
+                  key={option.key}
+                  variant={active ? "contained" : "outlined"}
+                  size="small"
+                  onClick={() => {
+                    // Update the corresponding field in aiBandSelection
+                    if (option.key === "bass") {
+                      setAiBandSelection(prev => ({ ...prev, bass: !prev.bass }));
+                    } else if (option.key === "piano") {
+                      setAiBandSelection(prev => ({ ...prev, piano: !prev.piano }));
+                    } else if (option.key === "guitar") {
+                      setAiBandSelection(prev => ({ ...prev, rhythm: !prev.rhythm }));
+                    } else if (option.key === "drums") {
+                      setAiBandSelection(prev => ({ ...prev, drums: !prev.drums }));
+                    } else if (option.key === "organ") {
+                      setAiBandSelection(prev => ({ ...prev, lead: !prev.lead }));
+                    } else if (option.key === "violin") {
+                      setAiBandSelection(prev => ({ ...prev, pad: !prev.pad }));
+                    } else if (option.key === "flute") {
+                      setAiBandSelection(prev => ({ ...prev, vocal: !prev.vocal }));
+                    }
+                  }}
+                  sx={{
+                    borderRadius:999, minWidth:0, px:2, py:0.5,
+                    textTransform:"none", fontSize:11,
+                    backgroundColor: active ? colors.primary : "transparent",
+                    borderColor: colors.border,
+                    color: active ? "white" : colors.text,
+                  }}
+                >
+                  {option.icon} {option.label}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Row 4: Producer sliders + Generate + Refresh */}
