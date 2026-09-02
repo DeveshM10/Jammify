@@ -876,3 +876,41 @@ export function removeTrackAudio(
         delete trackGains[trackId];
     }
 }
+
+/*
+ * playCountIn
+ *
+ * Plays a 4-beat metronome count-in to give the user time to get ready.
+ * Resolves when the count-in is complete.
+ */
+export async function playCountIn(bpm) {
+    if (!bpm || bpm <= 0) bpm = 120;
+    const beatDuration = 60 / bpm;
+    
+    // Create a sharp, clicking synth for the metronome
+    const clickSynth = new Tone.MembraneSynth({
+        pitchDecay: 0.01,
+        octaves: 10,
+        oscillator: { type: "square" },
+        envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 }
+    }).toDestination();
+    
+    const startTime = Tone.now() + 0.1; // Small buffer to ensure timing
+    
+    // Schedule 4 clicks
+    for (let i = 0; i < 4; i++) {
+        const time = startTime + (i * beatDuration);
+        // First click (downbeat) is higher pitch
+        const note = i === 0 ? "C6" : "G5";
+        const velocity = i === 0 ? 1 : 0.7;
+        clickSynth.triggerAttackRelease(note, "32n", time, velocity);
+    }
+    
+    // Wait for the 4 beats to complete before resolving
+    return new Promise(resolve => {
+        setTimeout(() => {
+            clickSynth.dispose();
+            resolve();
+        }, (beatDuration * 4 * 1000) + 150); // Add slight buffer
+    });
+}

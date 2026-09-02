@@ -63,6 +63,7 @@ import {
     unsoloAllAudio,
     preWarmSamplers,
     loadInstrumentForTrack,
+    playCountIn
 } from "./audio";
 
 import {
@@ -433,6 +434,7 @@ function App() {
   const [arrangementPreset, setArrangementPreset] = useState("radio");
   const [aiBandSelection, setAiBandSelection] = useState(DEFAULT_AI_BAND_SELECTION);
   const [userInstrument, setUserInstrument] = useState("nothing"); // Track what the user plays
+  const [countingIn, setCountingIn] = useState(false);
   const [aiProducerSettings, setAiProducerSettings] = useState({
     energy: 74,
     vocalIntensity: 68,
@@ -1171,6 +1173,16 @@ const playAllTracks = async () => {
 
     playingRef.current = true;
     pausedRef.current = false;
+
+    // Metronome Count-In
+    setCountingIn(true);
+    await playCountIn(bpmRef.current);
+    setCountingIn(false);
+    
+    // Check if stopped during count-in
+    if (playbackId !== playbackIdRef.current) {
+        return;
+    }
 
     setIsPlaying(true);
     setActiveChords([]);
@@ -1939,6 +1951,32 @@ const generateLocalBand = async (song = importedSong, style = bandStyle, statusM
       throw new Error("The arranger returned no tracks.");
     }
 
+    // Map user instrument to internal Tone.js instrument
+    const instrumentMap = {
+      drums: "drums",
+      bass_guitar: "finger_bass",
+      rhythm_guitar: "rock_guitar",
+      lead_guitar: "rock_guitar",
+      piano: "acoustic_grand_piano",
+      keyboards: "electric_grand_piano",
+      vocals: "violin" // AI uses violin for vocal melodies in pop/rock
+    };
+
+    const userMappedInst = instrumentMap[userInstrument];
+
+    // Mark the user's track as reserved and muted
+    nextTracks = nextTracks.map(track => {
+      if (userMappedInst && (track.instrument === userMappedInst || track.name.toLowerCase().includes(userInstrument.split("_")[0]))) {
+        return {
+          ...track,
+          name: `You: ${track.name}`,
+          muted: true,
+          reservedForUser: true
+        };
+      }
+      return track;
+    });
+
     setTracks(nextTracks);
     setSelectedTrack(nextTracks[0]?.id ?? null);
     setTheoryMeta(
@@ -2080,7 +2118,23 @@ async function importSong() {
             size="small"
             label="Band style"
             value={bandStyle}
-            onChange={(e) => setBandStyle(e.target.value)}
+            onChange={(e) => {
+              const newStyle = e.target.value;
+              setBandStyle(newStyle);
+              
+              // Recommend optimal band setup based on style
+              const recs = {
+                pop: { bass: true, piano: true, rhythm: true, drums: true, lead: false, pad: false, vocal: false },
+                rock: { bass: true, piano: false, rhythm: true, drums: true, lead: false, pad: false, vocal: false },
+                jazz: { bass: true, piano: true, rhythm: false, drums: true, lead: true, pad: false, vocal: false },
+                cinematic: { bass: true, piano: false, rhythm: true, drums: false, lead: true, pad: true, vocal: false },
+                "lo-fi": { bass: true, piano: true, rhythm: false, drums: true, lead: true, pad: false, vocal: false },
+                acoustic: { bass: true, piano: false, rhythm: true, drums: false, lead: true, pad: false, vocal: false },
+              };
+              if (recs[newStyle]) {
+                setAiBandSelection(recs[newStyle]);
+              }
+            }}
             sx={{ minWidth: window.innerWidth < 640 ? "100%" : 140 }}
         >
             {styleOptions.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
@@ -2127,20 +2181,6 @@ async function importSong() {
                 size="small"
                 onClick={() => {
                   setUserInstrument(instrument);
-                  
-                  // Auto-update AI band selection based on user's choice
-                  if (instrument !== "nothing") {
-                    setAiBandSelection(prev => {
-                      const updated = { ...prev };
-                      if (instrument === "drums") updated.drums = false;
-                      if (instrument === "bass_guitar") updated.bass = false;
-                      if (instrument === "rhythm_guitar") updated.rhythm = false;
-                      if (instrument === "lead_guitar") updated.lead = false;
-                      if (instrument === "piano" || instrument === "keyboards") updated.piano = false;
-                      if (instrument === "vocals") updated.vocal = false;
-                      return updated;
-                    });
-                  }
                 }}
                 sx={{
                   borderRadius:999, minWidth:0, px:2, py:0.5,
@@ -3001,6 +3041,17 @@ async function importSong() {
 
             >
             {track.name}
+            {track.reservedForUser && (
+                <div style={{
+                    fontSize: 10,
+                    color: colors.primary,
+                    marginTop: 4,
+                    fontWeight: 800,
+                    textTransform: "uppercase"
+                }}>
+                    (Reserved for You)
+                </div>
+            )}
         </div>
 
         <div
@@ -3008,7 +3059,9 @@ async function importSong() {
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                gap: 8
+                gap: 8,
+                opacity: track.reservedForUser ? 0.4 : 1,
+                pointerEvents: track.reservedForUser ? "none" : "auto"
             }}
         >
             <TextField
