@@ -7,6 +7,20 @@ let trackGains = {};
 let trackSamplers = {};
 let initialized = false;
 
+/*
+ * The drum voice is a plain Tone.MembraneSynth, not a Tone.Sampler/PolySynth --
+ * it has no releaseAll() (only single-voice triggerRelease()). Calling
+ * releaseAll() on it throws, so every stop/track-removal path needs to check
+ * which release method the instrument actually supports.
+ */
+function releaseAllNotes(sampler) {
+    if (typeof sampler.releaseAll === "function") {
+        sampler.releaseAll();
+    } else if (typeof sampler.triggerRelease === "function") {
+        sampler.triggerRelease();
+    }
+}
+
 // ─── Instrument definitions ───────────────────────────────────────────────────
 // Only instruments with confirmed working CDN paths are listed.
 // Rock/jazz styles previously assigned synth_bass, string_ensemble, trumpet
@@ -421,13 +435,25 @@ export async function playChord(
      * Convert MIDI numbers to Tone
      * note names.
      */
-    const noteNames =
+    let noteNames =
         notes
             .map(midiToNote)
             .filter(Boolean);
 
     if (noteNames.length === 0) {
         return;
+    }
+
+    /*
+     * The drum voice is a single-voice MembraneSynth, not a polyphonic
+     * sampler -- it can only sound one note at a time. If a multi-note
+     * chord gets assigned to it (now that "Drums" is a selectable
+     * instrument for any chord, not just the AI-generated drum track),
+     * only trigger the first note instead of letting triggerAttackRelease
+     * receive an array it can't handle.
+     */
+    if (instrument === "drums" && noteNames.length > 1) {
+        noteNames = [noteNames[0]];
     }
 
 
@@ -476,8 +502,17 @@ export async function playChord(
      */
     else if (normalizedSpeed >= 1) {
 
+        /*
+         * Monophonic instruments (the drum MembraneSynth) can't take an
+         * array as a note, even a single-element one -- Tone.Frequency()
+         * can't parse an array, so it silently resolves to null and every
+         * drum hit at speed >= 1 (the drum track's normal case) was being
+         * dropped with a console warning instead of making a sound.
+         * A polyphonic Sampler/PolySynth accepts either form, so unwrapping
+         * a single note here is always safe.
+         */
         sampler.triggerAttackRelease(
-            noteNames,
+            noteNames.length === 1 ? noteNames[0] : noteNames,
             duration
         );
 
@@ -646,7 +681,7 @@ export function stopTrackNotes(
 
             try {
 
-                voice.sampler.releaseAll();
+                releaseAllNotes(voice.sampler);
 
             }
             catch (error) {
@@ -690,7 +725,7 @@ export function stopAllNotes() {
 
             try {
 
-                sampler.releaseAll();
+                releaseAllNotes(sampler);
 
             }
             catch (error) {

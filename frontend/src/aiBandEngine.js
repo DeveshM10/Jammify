@@ -361,7 +361,8 @@ function makeTrack(
   name, instrument, volume, chords, color,
   preset = "default", style = "pop", sections = [],
   producerSettings = {}, arrangementPreset = "radio",
-  chordAnalyses = [], tonic = "C", mode = "major"
+  chordAnalyses = [], tonic = "C", mode = "major",
+  role = preset
 ) {
   const trackId = `${String(name || "track").replace(/\s+/g, "-").toLowerCase()}-${preset}-${Math.random().toString(36).slice(2, 9)}`;
 
@@ -390,6 +391,7 @@ function makeTrack(
     id:             trackId,
     name,
     instrument,
+    role,
     volume:         effectiveVolume,
     muted:          false,
     solo:           false,
@@ -703,8 +705,8 @@ export function buildBandFromSong(
   const sections = getSongSections(songChords, mode);
   const tracks   = [];
 
-  const common = (n, inst, vol, chords, color, p) =>
-    makeTrack(n, inst, vol, chords, color, p, resolvedStyle, sections, producerSettings, presetName, chordAnalyses, tonic, mode);
+  const common = (n, inst, vol, chords, color, p, role) =>
+    makeTrack(n, inst, vol, chords, color, p, resolvedStyle, sections, producerSettings, presetName, chordAnalyses, tonic, mode, role);
 
   // Create tracks with DESCRIPTIVE names based on the actual instruments being used
   // This eliminates confusion where "Piano" track plays electric piano, etc.
@@ -722,17 +724,17 @@ export function buildBandFromSong(
     return labels[instrument] || instrument.replace(/_/g, ' ');
   };
 
-  if (enabled.bass)   tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.bass),   stylePreset.instruments.bass,   stylePreset.volumes.bass,   songChords,  stylePreset.colors.bass,  "bass"),   theoryMeta });
-  if (enabled.piano)  tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.piano),  stylePreset.instruments.piano,  stylePreset.volumes.piano,  songChords,  stylePreset.colors.piano, "default"),theoryMeta });
-  if (enabled.rhythm) tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.rhythm), stylePreset.instruments.rhythm, stylePreset.volumes.rhythm, leadPattern, stylePreset.colors.rhythm,"default"),theoryMeta });
-  if (enabled.drums)  tracks.push({ ...common("Drums", "drums",       stylePreset.volumes.rhythm * 1.1, leadPattern, "#E17055", "drums"),  theoryMeta });
-  if (enabled.lead)   tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.lead),   stylePreset.instruments.lead,   stylePreset.volumes.lead,   leadPattern, stylePreset.colors.lead,  "lead"),   theoryMeta });
-  if (enabled.pad)    tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.pad),    stylePreset.instruments.pad,    stylePreset.volumes.pad,    leadPattern, stylePreset.colors.pad,   "pad"),    theoryMeta });
-  if (enabled.vocal)  tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.vocal),  stylePreset.instruments.vocal,  stylePreset.volumes.vocal,  leadPattern, stylePreset.colors.vocal, "vocal"),  theoryMeta });
+  if (enabled.bass)   tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.bass),   stylePreset.instruments.bass,   stylePreset.volumes.bass,   songChords,  stylePreset.colors.bass,  "bass",   "bass"),   theoryMeta });
+  if (enabled.piano)  tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.piano),  stylePreset.instruments.piano,  stylePreset.volumes.piano,  songChords,  stylePreset.colors.piano, "default","piano"),theoryMeta });
+  if (enabled.rhythm) tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.rhythm), stylePreset.instruments.rhythm, stylePreset.volumes.rhythm, leadPattern, stylePreset.colors.rhythm,"default","rhythm"),theoryMeta });
+  if (enabled.drums)  tracks.push({ ...common("Drums", "drums",       stylePreset.volumes.rhythm * 1.1, leadPattern, "#E17055", "drums",  "drums"),  theoryMeta });
+  if (enabled.lead)   tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.lead),   stylePreset.instruments.lead,   stylePreset.volumes.lead,   leadPattern, stylePreset.colors.lead,  "lead",   "lead"),   theoryMeta });
+  if (enabled.pad)    tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.pad),    stylePreset.instruments.pad,    stylePreset.volumes.pad,    leadPattern, stylePreset.colors.pad,   "pad",    "pad"),    theoryMeta });
+  if (enabled.vocal)  tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.vocal),  stylePreset.instruments.vocal,  stylePreset.volumes.vocal,  leadPattern, stylePreset.colors.vocal, "vocal",  "vocal"),  theoryMeta });
 
   if (tracks.length === 0) {
-    tracks.push({ ...common("Bass Guitar",    stylePreset.instruments.bass,  stylePreset.volumes.bass,  songChords, stylePreset.colors.bass,  "bass"),   theoryMeta });
-    tracks.push({ ...common("Acoustic Piano", stylePreset.instruments.piano, stylePreset.volumes.piano, songChords, stylePreset.colors.piano, "default"),theoryMeta });
+    tracks.push({ ...common("Bass Guitar",    stylePreset.instruments.bass,  stylePreset.volumes.bass,  songChords, stylePreset.colors.bass,  "bass",   "bass"),   theoryMeta });
+    tracks.push({ ...common("Acoustic Piano", stylePreset.instruments.piano, stylePreset.volumes.piano, songChords, stylePreset.colors.piano, "default","piano"),theoryMeta });
   }
 
   return tracks;

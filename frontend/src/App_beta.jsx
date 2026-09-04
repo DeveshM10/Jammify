@@ -91,6 +91,10 @@ const instrumentCatalog = [
     { value: "rock_guitar", label: "Rock Guitar", status: "working" },
     { value: "flute", label: "Flute", status: "working" },
     { value: "violin", label: "Violin", status: "working" },
+    // audio.js has always had full support for "drums" (a dedicated MembraneSynth)
+    // and aiBandEngine.js already creates tracks with instrument:"drums" -- but it
+    // was missing from this list, so no dropdown had a matching option for it.
+    { value: "drums", label: "Drums", status: "working" },
     { value: "synth_bass", label: "Synth Bass", status: "planned" },
     { value: "string_ensemble", label: "String Ensemble", status: "planned" },
     { value: "trumpet", label: "Trumpet", status: "planned" }
@@ -433,6 +437,9 @@ function App() {
   const [bandStyle, setBandStyle] = useState("pop");
   const [arrangementPreset, setArrangementPreset] = useState("radio");
   const [aiBandSelection, setAiBandSelection] = useState(DEFAULT_AI_BAND_SELECTION);
+  // Once the user manually toggles an instrument on/off, style changes must stop
+  // silently overwriting that choice with the style's default recommendation.
+  const bandSelectionCustomizedRef = useRef(false);
   const [userInstrument, setUserInstrument] = useState("nothing"); // Track what the user plays
   const [countingIn, setCountingIn] = useState(false);
   const [aiProducerSettings, setAiProducerSettings] = useState({
@@ -589,13 +596,18 @@ const changeTrackVolume = (id, volume) => {
 };
 
 const changeTrackInstrument = async (id, instrument) => {
-    // First, update the track data
+    // Update the track default AND re-voice every chord already on this track.
+    // Each chord carries its own `instrument` field (set at creation time, or
+    // overridden per-chord via the Add/Edit Chord dialog) which now takes
+    // priority during playback -- so without this cascade, changing the
+    // track's instrument here would only affect chords added afterward.
     setTracks(prev =>
         prev.map(track =>
             track.id === id
                 ? {
                     ...track,
-                    instrument
+                    instrument,
+                    chords: track.chords.map(chord => ({ ...chord, instrument }))
                 }
                 : track
         )
@@ -1316,7 +1328,11 @@ const playAllTracks = async () => {
 
                     volume: track.volume,
 
-                    instrument: track.instrument,
+                    // A chord's own instrument (set via the Add/Edit Chord dialog)
+                    // must win over the track default -- previously this always
+                    // forced track.instrument, so picking a per-chord instrument
+                    // in the dialog had no audible effect at all.
+                    instrument: chord.instrument || track.instrument,
 
                     trackId: track.id,
 
@@ -1951,22 +1967,26 @@ const generateLocalBand = async (song = importedSong, style = bandStyle, statusM
       throw new Error("The arranger returned no tracks.");
     }
 
-    // Map user instrument to internal Tone.js instrument
-    const instrumentMap = {
+    // Map what the user says they play to the track ROLE it corresponds to.
+    // Matching by role (set once at track creation in aiBandEngine.js) instead of by
+    // instrument timbre avoids false positives: several roles can share the same
+    // sample (e.g. Rhythm and Lead can both be "rock_guitar"), so matching on
+    // instrument name used to mute the wrong track.
+    const roleForUserInstrument = {
       drums: "drums",
-      bass_guitar: "finger_bass",
-      rhythm_guitar: "rock_guitar",
-      lead_guitar: "rock_guitar",
-      piano: "acoustic_grand_piano",
-      keyboards: "electric_grand_piano",
-      vocals: "violin" // AI uses violin for vocal melodies in pop/rock
+      bass_guitar: "bass",
+      rhythm_guitar: "rhythm",
+      lead_guitar: "lead",
+      piano: "piano",
+      keyboards: "piano",
+      vocals: "vocal",
     };
 
-    const userMappedInst = instrumentMap[userInstrument];
+    const reservedRole = roleForUserInstrument[userInstrument];
 
     // Mark the user's track as reserved and muted
     nextTracks = nextTracks.map(track => {
-      if (userMappedInst && (track.instrument === userMappedInst || track.name.toLowerCase().includes(userInstrument.split("_")[0]))) {
+      if (reservedRole && track.role === reservedRole) {
         return {
           ...track,
           name: `You: ${track.name}`,
@@ -2131,7 +2151,10 @@ async function importSong() {
                 "lo-fi": { bass: true, piano: true, rhythm: false, drums: true, lead: true, pad: false, vocal: false },
                 acoustic: { bass: true, piano: false, rhythm: true, drums: false, lead: true, pad: false, vocal: false },
               };
-              if (recs[newStyle]) {
+              // Only auto-apply the recommendation if the user hasn't manually
+              // customised their band selection yet -- otherwise this would
+              // silently discard their choices every time they try a new style.
+              if (recs[newStyle] && !bandSelectionCustomizedRef.current) {
                 setAiBandSelection(recs[newStyle]);
               }
             }}
@@ -2204,47 +2227,26 @@ async function importSong() {
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           <span style={{ fontSize:12, fontWeight:600, color:colors.text, opacity:0.8 }}>What should the AI band play?</span>
           <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-            {[
-              { key:"bass", label:"Bass Guitar", icon:"🎸" },
-              { key:"piano", label:"Piano", icon:"🎹" },
-              { key:"guitar", label:"Guitar", icon:"🎸" },
-              { key:"drums", label:"Drums", icon:"🥁" },
-              { key:"organ", label:"Organ", icon:"🎹" },
-              { key:"violin", label:"Violin", icon:"🎻" },
-              { key:"flute", label:"Flute", icon:"🎺" }
-            ].map((option) => {
-              // Map to the existing aiBandSelection structure
-              const active = option.key === "bass" ? !!aiBandSelection.bass :
-                           option.key === "piano" ? !!aiBandSelection.piano :
-                           option.key === "guitar" ? !!aiBandSelection.rhythm :
-                           option.key === "drums" ? !!aiBandSelection.drums :
-                           option.key === "organ" ? !!aiBandSelection.lead :
-                           option.key === "violin" ? !!aiBandSelection.pad :
-                           option.key === "flute" ? !!aiBandSelection.vocal :
-                           false;
-              
+            {aiBandInstrumentOptions.map((option) => {
+              // aiBandInstrumentOptions keys line up 1:1 with aiBandSelection and
+              // with each track's `role` -- no more guessing/relabeling here.
+              // (Previously this list used fixed instrument names like "Organ" /
+              // "Violin" / "Flute" for the lead/pad/vocal roles, which was wrong
+              // whenever the active style used a different instrument for that role.)
+              const active = !!aiBandSelection[option.key];
+              const icon = {
+                bass:"🎸", piano:"🎹", rhythm:"🎸",
+                lead:"🎺", pad:"🎻", drums:"🥁", vocal:"🎤",
+              }[option.key] || "🎵";
+
               return (
                 <Button
                   key={option.key}
                   variant={active ? "contained" : "outlined"}
                   size="small"
                   onClick={() => {
-                    // Update the corresponding field in aiBandSelection
-                    if (option.key === "bass") {
-                      setAiBandSelection(prev => ({ ...prev, bass: !prev.bass }));
-                    } else if (option.key === "piano") {
-                      setAiBandSelection(prev => ({ ...prev, piano: !prev.piano }));
-                    } else if (option.key === "guitar") {
-                      setAiBandSelection(prev => ({ ...prev, rhythm: !prev.rhythm }));
-                    } else if (option.key === "drums") {
-                      setAiBandSelection(prev => ({ ...prev, drums: !prev.drums }));
-                    } else if (option.key === "organ") {
-                      setAiBandSelection(prev => ({ ...prev, lead: !prev.lead }));
-                    } else if (option.key === "violin") {
-                      setAiBandSelection(prev => ({ ...prev, pad: !prev.pad }));
-                    } else if (option.key === "flute") {
-                      setAiBandSelection(prev => ({ ...prev, vocal: !prev.vocal }));
-                    }
+                    bandSelectionCustomizedRef.current = true;
+                    setAiBandSelection(prev => ({ ...prev, [option.key]: !prev[option.key] }));
                   }}
                   sx={{
                     borderRadius:999, minWidth:0, px:2, py:0.5,
@@ -2254,7 +2256,7 @@ async function importSong() {
                     color: active ? "white" : colors.text,
                   }}
                 >
-                  {option.icon} {option.label}
+                  {icon} {option.label}
                 </Button>
               );
             })}
