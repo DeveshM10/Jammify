@@ -512,6 +512,53 @@ export async function playChord(
 
     /*
      * ------------------------------------------------
+     * STRUM PATTERN (real per-eighth/sixteenth-note timing)
+     * ------------------------------------------------
+     *
+     * Ultimate Guitar's own community-contributed strumming pattern for
+     * this song, when it has one (see aiBandEngine.js / song_chord_importer.py) --
+     * dynamics.strumSlots is a list of { offsetFraction, attack } spanning
+     * this chord's full duration. `attack:false` slots are the confirmed
+     * "downbeat sustain" rule (every occurrence checked against real UG
+     * data landed exactly on a downbeat) -- skip re-striking there and let
+     * the previous strum ring through, same as a real guitarist would.
+     * Every attack slot re-plays the FULL chord (a strum re-articulates the
+     * whole shape, not one note at a time -- that's what the SPEED-based
+     * arpeggio branch below is for, a different technique), alternating a
+     * touch louder/softer by slot parity the way a down-stroke naturally
+     * lands harder than the up-stroke after it.
+     */
+    else if (Array.isArray(dynamics.strumSlots) && dynamics.strumSlots.length > 0) {
+
+        const slots = dynamics.strumSlots;
+
+        slots.forEach((slot, i) => {
+            if (!slot.attack) return;
+
+            const startTime = context.currentTime + slot.offsetFraction * duration;
+            const nextOffset = i + 1 < slots.length ? slots[i + 1].offsetFraction : 1;
+            const slotDuration = Math.max(0.05, (nextOffset - slot.offsetFraction) * duration);
+
+            // Down-strokes (even slots) land a little harder than the
+            // up-stroke that follows -- real strumming dynamics, not a guess
+            // about this specific song.
+            const strokeVelocity = i % 2 === 0 ? VELOCITY : Math.round(VELOCITY * 0.85);
+
+            noteNames.forEach(note => {
+                instrumentVoice.start({
+                    note,
+                    time: startTime,
+                    duration: slotDuration,
+                    velocity: strokeVelocity,
+                });
+            });
+        });
+
+    }
+
+
+    /*
+     * ------------------------------------------------
      * SPEED 0
      * ------------------------------------------------
      *

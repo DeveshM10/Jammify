@@ -683,6 +683,22 @@ function makeTrack(
       }
 
       // ── DEFAULT (piano / rhythm) ──────────────────────────────────────────
+      // Real strum timing only applies to the rhythm-guitar role -- piano/
+      // organ comping doesn't strum, and forcing speed:1 (full block chord
+      // per attack, see audio.js's STRUM PATTERN branch in playChord) would
+      // be wrong for an instrument that was never strumming in the first
+      // place.
+      if (role === "rhythm" && chord.strumSlots) {
+        return {
+          ...base,
+          name: chord.name || "C",
+          octave: style === "rock" ? 3 : 4,
+          beats: Math.max(1, Math.round(beatLength * sectionBoostVal)),
+          speed: 1,
+          strumSlots: chord.strumSlots,
+        };
+      }
+
       return {
         ...base,
         name: chord.name || "C",
@@ -755,6 +771,34 @@ export function buildBandFromSong(
     // as the song being imported, rather than a generic invented tune.
     humNote: (humMelody && humMelody[i]) || null,
   }));
+
+  // Real per-eighth/sixteenth-note strum timing, when Ultimate Guitar has a
+  // community-contributed strumming pattern for this song (see
+  // song_chord_importer.py's extract_song_metadata). Attack direction
+  // (down/up) isn't part of this -- that's just standard alternating
+  // strokes, universal guitar technique -- but which slots re-strike vs.
+  // let the previous chord ring (the confirmed "downbeat sustain" rule,
+  // verified against real data, not guessed) genuinely varies per song and
+  // is worth carrying through. Only the rhythm-guitar role uses this (see
+  // the "rhythm" branch below) -- piano/organ comping doesn't strum.
+  const strumPattern = safeSong.strumPattern?.attacks?.length > 0
+    ? safeSong.strumPattern
+    : null;
+
+  if (strumPattern) {
+    const template = strumPattern.attacks;
+    const slotsPerBeat = strumPattern.slotsPerBeat || 2;
+    let phase = 0; // keeps the pattern's downbeat aligned across chord boundaries
+    songChords.forEach((chord) => {
+      const beats = chord.importedBeats || chord.beats || 1;
+      const numSlots = Math.max(1, Math.round(beats * slotsPerBeat));
+      chord.strumSlots = Array.from({ length: numSlots }, (_, i) => ({
+        offsetFraction: i / numSlots,
+        attack: template[(phase + i) % template.length],
+      }));
+      phase = (phase + numSlots) % template.length;
+    });
+  }
 
   // ── Theory engine ────────────────────────────────────────────────────────
   const chordNames = songChords.map((c) => c.name);

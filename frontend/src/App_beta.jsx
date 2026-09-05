@@ -1123,7 +1123,7 @@ const playStep = async (chords, playbackId) => {
                 chord.trackId,
                 Number(chord.speed ?? 1),
                 chord.name,
-                { isFill: !!chord.isFill, tensionScore: chord.tensionScore }
+                { isFill: !!chord.isFill, tensionScore: chord.tensionScore, strumSlots: chord.strumSlots }
             );
 
         })

@@ -27,6 +27,14 @@ REPEAT_SUFFIX_RE = re.compile(r"[xX]\s*(\d+)\s*$")
 BPM_RE      = re.compile(r'"bpm"\s*:\s*(\d+)')
 TONALITY_RE = re.compile(r'"tonality"\s*:\s*"([^"]*)"')
 CAPO_RE     = re.compile(r'"capo"\s*:\s*(\d+)')
+# The first community-contributed strumming pattern in full: its subdivision
+# resolution (denuminator -- 8 = eighth notes, 16 = sixteenths) and the
+# per-slot codes that drive Ultimate Guitar's own strum-pattern arrows.
+FIRST_STRUMMING_RE = re.compile(
+    r'"denuminator"\s*:\s*(\d+)\s*,\s*"bpm"\s*:\s*\d+\s*,\s*"is_triplet"\s*:\s*(\d+)\s*,'
+    r'\s*"measures"\s*:\s*\[(.*?)\]\s*\}'
+)
+MEASURE_CODE_RE = re.compile(r'"measure"\s*:\s*(\d+)')
 
 NOTE_TO_PC = {
     "C": 0, "B#": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3,
@@ -325,7 +333,27 @@ def extract_song_metadata(html: str):
     capo_match = CAPO_RE.search(decoded)
     capo = int(capo_match.group(1)) if capo_match else 0
 
-    return {"bpm": bpm, "tonality": tonality, "capo": capo}
+    # Real per-eighth/sixteenth-note strum data: which slots get struck, and
+    # (from a confirmed pattern, not a guess -- every "3" code lines up
+    # exactly with a downbeat across every example checked) which slots on
+    # the beat should sustain the previous strum instead of re-striking.
+    # Direction (down/up) isn't part of this data at all -- it's standard
+    # alternating strokes by slot position, universal guitar technique, not
+    # something that needs to be read from the page.
+    strum_pattern = None
+    strumming_match = FIRST_STRUMMING_RE.search(decoded)
+    if strumming_match:
+        denuminator = int(strumming_match.group(1))
+        codes = MEASURE_CODE_RE.findall(strumming_match.group(3))
+        if codes and denuminator > 0:
+            strum_pattern = {
+                "slotsPerBeat": denuminator / 4,
+                # True = strike here, False = let the previous strike ring
+                # through (the confirmed "3 = downbeat sustain" rule).
+                "attacks": [code != "3" for code in codes],
+            }
+
+    return {"bpm": bpm, "tonality": tonality, "capo": capo, "strumPattern": strum_pattern}
 
 
 def _transpose_note_name(name: str, semitones: int) -> str:
@@ -430,6 +458,7 @@ def import_chords_from_url(url: str):
         "bpm": metadata["bpm"],
         "key": key,
         "capo": capo,
+        "strumPattern": metadata["strumPattern"],
     }
 
 
