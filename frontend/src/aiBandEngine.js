@@ -688,12 +688,22 @@ function makeTrack(
       // per attack, see audio.js's STRUM PATTERN branch in playChord) would
       // be wrong for an instrument that was never strumming in the first
       // place.
+      //
+      // Critically, `beats` here must be the exact REAL duration
+      // (importedBeats) strumSlots was computed against, not beatLength --
+      // beatLength already applies densityMult/style multipliers on top of
+      // the real value, and sectionBoostVal stretches it further. Scaling
+      // the scheduled duration without rescaling the slot offsets to match
+      // would spread the real per-eighth-note strum pattern across a
+      // longer-or-shorter window than it was measured for, which is
+      // exactly "the speed doesn't match the real recording" bug this
+      // feature exists to fix, reintroduced by a different multiplier.
       if (role === "rhythm" && chord.strumSlots) {
         return {
           ...base,
           name: chord.name || "C",
           octave: style === "rock" ? 3 : 4,
-          beats: Math.max(1, Math.round(beatLength * sectionBoostVal)),
+          beats: Math.max(1, chord.importedBeats || chord.beats || 1),
           speed: 1,
           strumSlots: chord.strumSlots,
         };
@@ -781,15 +791,38 @@ export function buildBandFromSong(
   // verified against real data, not guessed) genuinely varies per song and
   // is worth carrying through. Only the rhythm-guitar role uses this (see
   // the "rhythm" branch below) -- piano/organ comping doesn't strum.
-  const strumPattern = safeSong.strumPattern?.attacks?.length > 0
-    ? safeSong.strumPattern
-    : null;
+  //
+  // Patterns are keyed by section (Verse/Chorus/Bridge/"default") because a
+  // song can genuinely use a different pattern -- and a different real bar
+  // length -- per section: Radiohead's "Let Down" explicitly runs its Verse
+  // as a 5-beat pattern "superimposed over 4/4" while its Chorus is a plain
+  // 4-beat pattern. Phase resets whenever a chord switches to a pattern
+  // different from the one before it -- picking up mid-cycle from an
+  // unrelated pattern (e.g. Chorus's 4-beat cycle) at a leftover Verse
+  // phase (from a 5-beat cycle) would misalign the downbeat instead of
+  // preserving it.
+  const strumPatternsBySection = safeSong.strumPatterns || {};
 
-  if (strumPattern) {
-    const template = strumPattern.attacks;
-    const slotsPerBeat = strumPattern.slotsPerBeat || 2;
-    let phase = 0; // keeps the pattern's downbeat aligned across chord boundaries
+  const patternForSection = (section) =>
+    (strumPatternsBySection[section]?.attacks?.length > 0 && strumPatternsBySection[section]) ||
+    (strumPatternsBySection.default?.attacks?.length > 0 && strumPatternsBySection.default) ||
+    null;
+
+  {
+    let phase = 0;
+    let lastPattern = null;
     songChords.forEach((chord) => {
+      const pattern = patternForSection(chord.section);
+      if (!pattern) {
+        chord.strumSlots = null;
+        return;
+      }
+      if (pattern !== lastPattern) {
+        phase = 0;
+        lastPattern = pattern;
+      }
+      const template = pattern.attacks;
+      const slotsPerBeat = pattern.slotsPerBeat || 2;
       const beats = chord.importedBeats || chord.beats || 1;
       const numSlots = Math.max(1, Math.round(beats * slotsPerBeat));
       chord.strumSlots = Array.from({ length: numSlots }, (_, i) => ({

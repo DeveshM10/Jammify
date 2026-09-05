@@ -27,12 +27,14 @@ REPEAT_SUFFIX_RE = re.compile(r"[xX]\s*(\d+)\s*$")
 BPM_RE      = re.compile(r'"bpm"\s*:\s*(\d+)')
 TONALITY_RE = re.compile(r'"tonality"\s*:\s*"([^"]*)"')
 CAPO_RE     = re.compile(r'"capo"\s*:\s*(\d+)')
-# The first community-contributed strumming pattern in full: its subdivision
-# resolution (denuminator -- 8 = eighth notes, 16 = sixteenths) and the
-# per-slot codes that drive Ultimate Guitar's own strum-pattern arrows.
-FIRST_STRUMMING_RE = re.compile(
-    r'"denuminator"\s*:\s*(\d+)\s*,\s*"bpm"\s*:\s*\d+\s*,\s*"is_triplet"\s*:\s*(\d+)\s*,'
-    r'\s*"measures"\s*:\s*\[(.*?)\]\s*\}'
+# Every community-contributed strumming pattern, in full: which part of the
+# song it's for ("Intro / Verse main pattern", "Chorus...", or "" when a
+# tab has just one undifferentiated pattern), its subdivision resolution
+# (denuminator -- 8 = eighth notes, 16 = sixteenths), and the per-slot codes
+# that drive Ultimate Guitar's own strum-pattern arrows.
+STRUMMING_ENTRY_RE = re.compile(
+    r'"part"\s*:\s*"([^"]*)"\s*,\s*"denuminator"\s*:\s*(\d+)\s*,\s*"bpm"\s*:\s*(\d+)\s*,'
+    r'\s*"is_triplet"\s*:\s*\d+\s*,\s*"measures"\s*:\s*\[(.*?)\]\s*\}'
 )
 MEASURE_CODE_RE = re.compile(r'"measure"\s*:\s*(\d+)')
 
@@ -178,7 +180,23 @@ def _normalize_section_name(raw: str) -> str:
     return SECTION_NAME_MAP.get(key, "Verse")
 
 
-def _chords_from_tab_block(block: str, section: str):
+def _bucket_from_free_text(text: str):
+    """
+    Same Verse/Chorus/Bridge bucketing as _normalize_section_name(), but for
+    a strumming pattern's free-text "part" label ("Intro / Verse main
+    pattern", "Chorus (arranged in 3 bar sections)") instead of a clean
+    [Section] tag -- keyword search instead of an exact match. Returns None
+    when the label doesn't mention a recognizable section at all (a tab
+    with just one undifferentiated pattern leaves "part" empty).
+    """
+    lowered = text.lower()
+    for keyword, bucket in SECTION_NAME_MAP.items():
+        if keyword in lowered:
+            return bucket
+    return None
+
+
+def _chords_from_tab_block(block: str, section: str, beats_per_line: float = BEATS_PER_LINE):
     """
     Parse one [tab]...[/tab] block: a chord line (one or more [ch] tags,
     left-padded with spaces to visually align above the lyric line beneath)
@@ -188,6 +206,10 @@ def _chords_from_tab_block(block: str, section: str):
     of the lyric line, tells us what *fraction* of the bar that chord holds
     for -- a chord written above the first word of a line is held far longer
     than one written just before the last syllable.
+
+    beats_per_line defaults to the standard 4-beat bar, but a song can state
+    (via its own strumming pattern's length) that a section's lines are
+    actually a different length -- see extract_song_metadata().
     """
 
     lines = [ln for ln in re.split(r"\r\n|\r|\n", block) if ln.strip() != ""]
@@ -227,13 +249,13 @@ def _chords_from_tab_block(block: str, section: str):
     for i, (col, name) in enumerate(chord_positions):
         next_col = chord_positions[i + 1][0] if i + 1 < len(chord_positions) else lyric_len
         span = max(1, next_col - col)
-        beats = max(1, round((span / lyric_len) * BEATS_PER_LINE))
+        beats = max(1, round((span / lyric_len) * beats_per_line))
         result.append({"name": name, "beats": beats, "section": section})
 
     return result
 
 
-def _chords_from_freeform_line(line: str, section: str):
+def _chords_from_freeform_line(line: str, section: str, beats_per_line: float = BEATS_PER_LINE):
     """
     Parse a bare chord line outside a [tab] block, e.g. an instrumental
     break: "[ch]C[/ch] [ch]F[/ch] [ch]Am[/ch] [ch]G[/ch] x2".
@@ -258,17 +280,28 @@ def _chords_from_freeform_line(line: str, section: str):
     repeat_count = int(repeat_match.group(1)) if repeat_match else 1
     repeat_count = max(1, min(repeat_count, 8))  # sanity cap
 
-    one_pass = [{"name": n, "beats": BEATS_PER_LINE, "section": section} for n in names]
+    one_pass = [{"name": n, "beats": round(beats_per_line), "section": section} for n in names]
     return one_pass * repeat_count
 
 
-def extract_chords_from_content(content: str):
+def extract_chords_from_content(content: str, beats_per_line_by_section: dict = None, default_beats_per_line: float = BEATS_PER_LINE):
     """
     Walk the Ultimate Guitar chord sheet top to bottom, tracking section
     headers ([Verse], [Chorus]/[Refrain], [Bridge], [Instrumental], ...) and
     reconstructing each chord's real duration from the tab's line layout,
     instead of treating every [ch] tag as an identical 1-beat hit.
+
+    beats_per_line_by_section (Verse/Chorus/Bridge -> real bar length) comes
+    from the song's own strumming pattern lengths when available -- see
+    extract_song_metadata() -- since a song's bar length isn't always the
+    standard 4 beats for every section (Radiohead's "Let Down" explicitly
+    runs its Verse as a 5-beat pattern "superimposed over 4/4").
     """
+
+    beats_per_line_by_section = beats_per_line_by_section or {}
+
+    def beats_for(section):
+        return beats_per_line_by_section.get(section, default_beats_per_line)
 
     current_section = "Verse"
     result = []
@@ -288,9 +321,9 @@ def extract_chords_from_content(content: str):
                 current_section = _normalize_section_name(header.group(1))
                 continue
             if "[ch]" in line.lower():
-                result.extend(_chords_from_freeform_line(line, current_section))
+                result.extend(_chords_from_freeform_line(line, current_section, beats_for(current_section)))
 
-        result.extend(_chords_from_tab_block(match.group(1), current_section))
+        result.extend(_chords_from_tab_block(match.group(1), current_section, beats_for(current_section)))
         cursor = match.end()
 
     # Trailing content after the last [tab] block.
@@ -304,7 +337,7 @@ def extract_chords_from_content(content: str):
             current_section = _normalize_section_name(header.group(1))
             continue
         if "[ch]" in line.lower():
-            result.extend(_chords_from_freeform_line(line, current_section))
+            result.extend(_chords_from_freeform_line(line, current_section, beats_for(current_section)))
 
     return result
 
@@ -333,27 +366,64 @@ def extract_song_metadata(html: str):
     capo_match = CAPO_RE.search(decoded)
     capo = int(capo_match.group(1)) if capo_match else 0
 
-    # Real per-eighth/sixteenth-note strum data: which slots get struck, and
-    # (from a confirmed pattern, not a guess -- every "3" code lines up
-    # exactly with a downbeat across every example checked) which slots on
-    # the beat should sustain the previous strum instead of re-striking.
-    # Direction (down/up) isn't part of this data at all -- it's standard
-    # alternating strokes by slot position, universal guitar technique, not
-    # something that needs to be read from the page.
-    strum_pattern = None
-    strumming_match = FIRST_STRUMMING_RE.search(decoded)
-    if strumming_match:
-        denuminator = int(strumming_match.group(1))
-        codes = MEASURE_CODE_RE.findall(strumming_match.group(3))
-        if codes and denuminator > 0:
-            strum_pattern = {
-                "slotsPerBeat": denuminator / 4,
-                # True = strike here, False = let the previous strike ring
-                # through (the confirmed "3 = downbeat sustain" rule).
-                "attacks": [code != "3" for code in codes],
-            }
+    # Real per-eighth/sixteenth-note strum data, PER SONG SECTION -- a tab
+    # can have a different pattern for Verse vs Chorus (Let Down does: a
+    # 5-beat pattern "superimposed over 4/4" for Intro/Verse per the tab's
+    # own written note, and a plain 4-beat pattern for the Chorus). Using
+    # just one global pattern/bar-length for the whole song was silently
+    # wrong for exactly this kind of song: BEATS_PER_LINE=4 assumed every
+    # lyric line was a 4-beat bar, but Verse lines here are actually 5 beats
+    # -- chords were changing 20% too fast, which is a real, audible "this
+    # doesn't match the recording's pace" bug distinct from the BPM itself
+    # being right or wrong.
+    #
+    # Rather than parse that free-text note (fragile -- it won't exist in
+    # that exact wording on every tab), the strumming pattern's own length
+    # already encodes its real bar length: attacks-count / slotsPerBeat.
+    # Let Down's Intro/Verse pattern is 10 slots at 2 slots/beat = 5 beats,
+    # exactly matching what the page says in words.
+    strum_patterns_by_section = {}
+    beats_per_line_by_section = {}
+    default_strum_pattern = None
+    default_beats_per_line = None
 
-    return {"bpm": bpm, "tonality": tonality, "capo": capo, "strumPattern": strum_pattern}
+    for match in STRUMMING_ENTRY_RE.finditer(decoded):
+        part, denuminator_str, _bpm, measures_str = match.groups()
+        denuminator = int(denuminator_str)
+        codes = MEASURE_CODE_RE.findall(measures_str)
+        if not codes or denuminator <= 0:
+            continue
+
+        slots_per_beat = denuminator / 4
+        pattern = {
+            "slotsPerBeat": slots_per_beat,
+            # True = strike here, False = let the previous strike ring
+            # through (the confirmed "3 = downbeat sustain" rule).
+            "attacks": [code != "3" for code in codes],
+        }
+        bar_beats = len(codes) / slots_per_beat
+
+        bucket = _bucket_from_free_text(part)
+        if bucket:
+            strum_patterns_by_section[bucket] = pattern
+            beats_per_line_by_section[bucket] = bar_beats
+        elif default_strum_pattern is None:
+            # No section keyword in "part" -- a tab with just one
+            # undifferentiated pattern for the whole song (e.g. Raabta,
+            # Bohemian Rhapsody's "General Pattern"). Applies everywhere
+            # nothing more specific matched.
+            default_strum_pattern = pattern
+            default_beats_per_line = bar_beats
+
+    return {
+        "bpm": bpm,
+        "tonality": tonality,
+        "capo": capo,
+        "strumPatternsBySection": strum_patterns_by_section,
+        "defaultStrumPattern": default_strum_pattern,
+        "beatsPerLineBySection": beats_per_line_by_section,
+        "defaultBeatsPerLine": default_beats_per_line,
+    }
 
 
 def _transpose_note_name(name: str, semitones: int) -> str:
@@ -428,8 +498,18 @@ def import_chords_from_url(url: str):
             "This Ultimate Guitar page does not contain a chord sheet. Please use a regular song tab/chord URL instead."
         ) from exc
 
+    # Metadata comes first now -- chord *durations* depend on it whenever a
+    # section's real bar length (from its own strumming pattern) isn't the
+    # standard 4 beats (see extract_chords_from_content / extract_song_metadata).
+    metadata = extract_song_metadata(html)
+
+    beats_per_line_by_section = dict(metadata["beatsPerLineBySection"])
+    default_beats_per_line = metadata["defaultBeatsPerLine"] or BEATS_PER_LINE
+
     chords = extract_chords_from_content(
-        content
+        content,
+        beats_per_line_by_section=beats_per_line_by_section,
+        default_beats_per_line=default_beats_per_line,
     )
 
     if not chords:
@@ -437,7 +517,6 @@ def import_chords_from_url(url: str):
             "No chords were found in the song."
         )
 
-    metadata = extract_song_metadata(html)
     capo = metadata["capo"]
 
     if capo:
@@ -447,6 +526,14 @@ def import_chords_from_url(url: str):
     key = metadata["tonality"]
     if key and capo:
         key = transpose_chord_name(key, capo)
+
+    # Strum patterns keyed by section (Verse/Chorus/Bridge), plus a
+    # "default" entry for songs with just one undifferentiated pattern --
+    # the arrangement engine picks whichever matches each chord's own
+    # section (see aiBandEngine.js).
+    strum_patterns = dict(metadata["strumPatternsBySection"])
+    if metadata["defaultStrumPattern"]:
+        strum_patterns["default"] = metadata["defaultStrumPattern"]
 
     return {
         "title": title,
@@ -458,7 +545,7 @@ def import_chords_from_url(url: str):
         "bpm": metadata["bpm"],
         "key": key,
         "capo": capo,
-        "strumPattern": metadata["strumPattern"],
+        "strumPatterns": strum_patterns,
     }
 
 
