@@ -1,57 +1,50 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --jf-bg: #F5F0FF;
+  --jf-bg-alt: #EDE7FB;
+  --jf-primary: #7C3AED;
+  --jf-primary-dark: #5B21B6;
+  --jf-primary-light: #EDE4FF;
+  --jf-accent: #FF4F93;
+  --jf-accent-light: #FFE1ED;
+  --jf-success: #16C79A;
+  --jf-card: #FFFFFF;
+  --jf-border: #E2D4FF;
+  --jf-text: #241748;
+  --jf-text-soft: rgba(36, 23, 72, 0.62);
+  --jf-danger: #FF5C7C;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  --jf-font-display: "Sora", "Segoe UI", system-ui, sans-serif;
+  --jf-font-body: "Inter", "Segoe UI", system-ui, sans-serif;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
+  --jf-radius-sm: 10px;
+  --jf-radius-md: 16px;
+  --jf-radius-lg: 24px;
+  --jf-shadow-card: 0 8px 24px rgba(124, 58, 237, 0.10);
+  --jf-shadow-pop: 0 12px 32px rgba(124, 58, 237, 0.18);
+
+  color-scheme: light;
+  font: 15px/1.45 var(--jf-font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+* ,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
-body {
+html, body {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow-x: hidden;
+  background: var(--jf-bg);
+  color: var(--jf-text);
+  font-family: var(--jf-font-body);
+  /* Respect device notches / gesture bars inside the Capacitor webview */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 #root {
@@ -60,55 +53,54 @@ body {
   margin: 0;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+h1, h2, h3 {
+  font-family: var(--jf-font-display);
+  color: var(--jf-text);
+  margin: 0;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
 p {
   margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+button, input, select, textarea {
+  font-family: inherit;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+/* Horizontal scroll strip: used for pill/chip rows so they never wrap into
+   a chaotic multi-line mess on narrow phones -- they scroll instead. */
+.jf-hscroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.jf-hscroll::-webkit-scrollbar {
+  display: none;
+}
+.jf-hscroll > * {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+.jf-card {
+  background: var(--jf-card);
+  border: 1px solid var(--jf-border);
+  border-radius: var(--jf-radius-md);
+  box-shadow: var(--jf-shadow-card);
 }
 
 /* Fill pulse animation for chord pill indicators */
 @keyframes fillPulse {
   from { opacity: 0.4; transform: scale(0.85); }
   to   { opacity: 1;   transform: scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

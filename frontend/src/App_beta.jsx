@@ -391,15 +391,22 @@ function App() {
     const colors = {
     background: "#F5F0FF",
     primary: "#7C3AED",
+    primaryDark: "#5B21B6",
     primaryLight: "#EDE4FF",
     accent: "#FF4F93",
     accentLight: "#FFE1ED",
     success: "#16C79A",
     card: "#FFFFFF",
+    surface: "#FAF7FF",
     border: "#E2D4FF",
     text: "#241748",
+    textSoft: "rgba(36,23,72,0.62)",
     danger: "#FF5C7C",
+    fontDisplay: "'Sora', 'Segoe UI', system-ui, sans-serif",
+    fontBody: "'Inter', 'Segoe UI', system-ui, sans-serif",
   };
+
+  const isNarrow = typeof window !== "undefined" && window.innerWidth < 640;
 
   const trackColors = [
     "#6D4AFF",
@@ -481,6 +488,7 @@ function App() {
   // Populated from theoryMeta on the first track after every band generation.
   const [theoryMeta,        setTheoryMeta]        = useState(null);
   const [jamName, setJamName] = useState("My Jam");
+  const [jamNameEditorOpen, setJamNameEditorOpen] = useState(false);
   const [savedJams, setSavedJams] = useState([]);
   const [savingJam, setSavingJam] = useState(false);
   const [loadingJams, setLoadingJams] = useState(false);
@@ -2061,73 +2069,93 @@ async function importSong() {
 
     <div
       style={{
-        width: "100vw",
+        width: "100%",
         minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: "max(20px, 5vw)",
-        padding: "max(12px, 4vw)",
-        paddingBottom: "100px", // space for bottom controls
+        gap: 0,
         boxSizing: "border-box",
-        background: colors.background,
+        background: `linear-gradient(180deg, ${colors.primaryLight} 0%, ${colors.background} 320px)`,
+        fontFamily: colors.fontBody,
         overflowX: "hidden",
         overflowY: "auto",
       }}
     >
 
-    {/* Song Import */}
+    {/* ── App Header ───────────────────────────────────────────────────── */}
+    <div
+      style={{
+        width: "100%",
+        position: "sticky",
+        top: 0,
+        zIndex: 40,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "14px 16px",
+        background: "rgba(245,240,255,0.85)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+        borderBottom: `1px solid ${colors.border}`,
+      }}
+    >
+      <div style={{
+        width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+        background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 17, boxShadow: `0 4px 12px ${colors.primary}55`,
+      }}>🎧</div>
+      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15, minWidth: 0 }}>
+        <span style={{ fontFamily: colors.fontDisplay, fontWeight: 800, fontSize: 17, color: colors.text }}>Jammify</span>
+        <span style={{ fontSize: 11, color: colors.textSoft, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          Paste a song, meet your AI band
+        </span>
+      </div>
+    </div>
 
     <div
       style={{
-        width: "90%",
-        maxWidth: 1000,
-        background: "rgba(109,74,255,0.06)",
-        border: `1px solid ${colors.border}`,
-        borderRadius: 16,
-        padding: "12px 16px",
+        width: "100%",
+        maxWidth: 640,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 18,
+        padding: "16px 14px",
+        paddingBottom: 110, // space for sticky bottom transport bar
         boxSizing: "border-box",
-        color: colors.text,
-        fontWeight: 700,
-        letterSpacing: 0.3
       }}
     >
-      🎧 Paste a song link, meet your AI band, hit play
-    </div>
 
-    {/* ── Import Bar ──────────────────────────────────────────────────── */}
-    <div
-        style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            width: window.innerWidth < 768 ? "95%" : "90%",
-            maxWidth: 900,
-        }}
-    >
-      {/* Row 1: URL input + Import button + Style picker */}
-      <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap: "wrap", flexDirection: window.innerWidth < 640 ? "column" : "row" }}>
-        <TextField
-            style={{ flex:1, minWidth: window.innerWidth < 640 ? "100%" : 220 }}
-            size="small"
-            label="Ultimate Guitar URL"
-            placeholder="Paste Ultimate Guitar song URL here"
-            value={songUrl}
-            onChange={(e) => setSongUrl(e.target.value)}
-            disabled={importing}
-        />
+    {/* ── Import a song ───────────────────────────────────────────────── */}
+    <div className="jf-card" style={{ width: "100%", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontFamily: colors.fontDisplay, fontWeight: 700, fontSize: 14, color: colors.text }}>
+        🔗 Import a song
+      </div>
+      <TextField
+          fullWidth
+          size="small"
+          label="Ultimate Guitar URL"
+          placeholder="Paste Ultimate Guitar song URL here"
+          value={songUrl}
+          onChange={(e) => setSongUrl(e.target.value)}
+          disabled={importing}
+      />
+      <div style={{ display: "flex", gap: 10 }}>
         <Button
             variant="contained"
             onClick={importSong}
             disabled={!songUrl.trim() || importing}
-            sx={{ backgroundColor: colors.primary, borderRadius: 3, textTransform:"none", whiteSpace:"nowrap", flex: window.innerWidth < 640 ? "1 1 100%" : "0 1 auto" }}
+            fullWidth
+            sx={{ backgroundColor: colors.primary, borderRadius: 999, textTransform:"none", fontWeight: 700, py: 1 }}
         >
             {importing ? "Importing..." : "🎵 Import"}
         </Button>
         <TextField
             select
             size="small"
-            label="Band style"
+            label="Style"
             value={bandStyle}
             onChange={(e) => {
               const newStyle = e.target.value;
@@ -2150,15 +2178,14 @@ async function importSong() {
                 setAiBandSelection(recs[newStyle]);
               }
             }}
-            sx={{ minWidth: window.innerWidth < 640 ? "100%" : 140 }}
+            sx={{ minWidth: 128, flexShrink: 0 }}
         >
             {styleOptions.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
         </TextField>
       </div>
 
-      {/* Row 2: Arrangement presets */}
-      <div style={{ display:"flex", flexWrap:"wrap", gap:8, alignItems:"center" }}>
-        <span style={{ fontSize:12, fontWeight:700, color:colors.text, opacity:0.6, marginRight:4 }}>Preset:</span>
+      {/* Arrangement presets -- horizontal scroll strip, never wraps/overflows */}
+      <div className="jf-hscroll" style={{ paddingTop: 2 }}>
         {arrangementPresetOptions.map((option) => (
           <Button
             key={option.value}
@@ -2166,8 +2193,8 @@ async function importSong() {
             size="small"
             onClick={() => setArrangementPreset(option.value)}
             sx={{
-              borderRadius:999, minWidth:0, px:1.5, py:0.5,
-              textTransform:"none", fontSize:12,
+              borderRadius:999, minWidth:0, px:1.8, py:0.5,
+              textTransform:"none", fontSize:12, fontWeight: 600,
               backgroundColor: arrangementPreset === option.value ? colors.primary : "transparent",
               borderColor: colors.border,
               color: arrangementPreset === option.value ? "white" : colors.text,
@@ -2175,50 +2202,57 @@ async function importSong() {
           >{option.label}</Button>
         ))}
       </div>
+    </div>
 
-      {/* Row 3: Choose Your Band */}
-      <div style={{ display:"flex", flexDirection:"column", gap:12, background:"rgba(16,24,40,0.4)", borderRadius:12, padding:"16px" }}>
-        
+    {/* ── Choose Your Band ────────────────────────────────────────────── */}
+    <div className="jf-card" style={{ width: "100%", padding: 16, display:"flex", flexDirection:"column", gap:14 }}>
+
         {/* Header */}
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <span style={{ fontSize:14, fontWeight:700, color:colors.text }}>🎵 Choose Your Band</span>
-          <span style={{ fontSize:11, color:colors.text, opacity:0.6 }}>Pick what you play + what AI plays</span>
+        <div style={{ display:"flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontFamily: colors.fontDisplay, fontSize:15, fontWeight:700, color:colors.text }}>🎵 Choose your band</span>
+          <span style={{ fontSize:12, color:colors.textSoft }}>Pick what you play, and what the AI fills in</span>
         </div>
-        
+
         {/* User Instrument Section */}
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-          <span style={{ fontSize:12, fontWeight:600, color:colors.text, opacity:0.8 }}>What do YOU play?</span>
-          <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-            {["drums", "bass_guitar", "rhythm_guitar", "lead_guitar", "piano", "keyboards", "vocals", "nothing"].map((instrument) => (
-              <Button
-                key={instrument}
-                variant={userInstrument === instrument ? "contained" : "outlined"}
-                size="small"
-                onClick={() => {
-                  setUserInstrument(instrument);
-                }}
-                sx={{
-                  borderRadius:999, minWidth:0, px:2, py:0.5,
-                  textTransform:"none", fontSize:11,
-                  backgroundColor: userInstrument === instrument ? colors.primary : "transparent",
-                  borderColor: colors.border,
-                  color: userInstrument === instrument ? "white" : colors.text,
-                }}
-              >
-                {instrument === "nothing" ? "Just Listen" : 
-                 instrument === "bass_guitar" ? "Bass" :
-                 instrument === "rhythm_guitar" ? "Rhythm Guitar" :
-                 instrument === "lead_guitar" ? "Lead Guitar" :
-                 instrument.charAt(0).toUpperCase() + instrument.slice(1)}
-              </Button>
-            ))}
+          <span style={{ fontSize:11, fontWeight:700, color:colors.textSoft, textTransform: "uppercase", letterSpacing: 0.4 }}>What do you play?</span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap:8 }}>
+            {["drums", "bass_guitar", "rhythm_guitar", "lead_guitar", "piano", "keyboards", "vocals", "nothing"].map((instrument) => {
+              const active = userInstrument === instrument;
+              const icon = {
+                drums:"🥁", bass_guitar:"🎸", rhythm_guitar:"🎸", lead_guitar:"🎸",
+                piano:"🎹", keyboards:"🎹", vocals:"🎤", nothing:"👂",
+              }[instrument] || "🎵";
+              return (
+                <button
+                  key={instrument}
+                  onClick={() => setUserInstrument(instrument)}
+                  style={{
+                    borderRadius: 14, padding: "10px 6px", cursor: "pointer",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                    background: active ? colors.primary : colors.surface,
+                    border: `1.5px solid ${active ? colors.primary : colors.border}`,
+                    color: active ? "white" : colors.text,
+                    fontSize: 11, fontWeight: 700, textAlign: "center",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <span style={{ fontSize: 18 }}>{icon}</span>
+                  {instrument === "nothing" ? "Just Listen" :
+                   instrument === "bass_guitar" ? "Bass" :
+                   instrument === "rhythm_guitar" ? "Rhythm Gtr" :
+                   instrument === "lead_guitar" ? "Lead Gtr" :
+                   instrument.charAt(0).toUpperCase() + instrument.slice(1)}
+                </button>
+              );
+            })}
           </div>
         </div>
-        
+
         {/* AI Band Section */}
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-          <span style={{ fontSize:12, fontWeight:600, color:colors.text, opacity:0.8 }}>What should the AI band play?</span>
-          <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+          <span style={{ fontSize:11, fontWeight:700, color:colors.textSoft, textTransform: "uppercase", letterSpacing: 0.4 }}>What should the AI band play?</span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap:8 }}>
             {aiBandInstrumentOptions.map((option) => {
               // aiBandInstrumentOptions keys line up 1:1 with aiBandSelection and
               // with each track's `role` -- no more guessing/relabeling here.
@@ -2232,55 +2266,54 @@ async function importSong() {
               }[option.key] || "🎵";
 
               return (
-                <Button
+                <button
                   key={option.key}
-                  variant={active ? "contained" : "outlined"}
-                  size="small"
                   onClick={() => {
                     bandSelectionCustomizedRef.current = true;
                     setAiBandSelection(prev => ({ ...prev, [option.key]: !prev[option.key] }));
                   }}
-                  sx={{
-                    borderRadius:999, minWidth:0, px:2, py:0.5,
-                    textTransform:"none", fontSize:11,
-                    backgroundColor: active ? colors.primary : "transparent",
-                    borderColor: colors.border,
+                  style={{
+                    borderRadius: 14, padding: "10px 6px", cursor: "pointer",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                    background: active ? `linear-gradient(135deg, ${colors.primary}, ${colors.accent})` : colors.surface,
+                    border: `1.5px solid ${active ? colors.primary : colors.border}`,
                     color: active ? "white" : colors.text,
+                    fontSize: 11, fontWeight: 700, textAlign: "center",
+                    transition: "all 0.15s ease",
                   }}
                 >
-                  {icon} {option.label}
-                </Button>
+                  <span style={{ fontSize: 18 }}>{icon}</span>
+                  {option.label}
+                </button>
               );
             })}
           </div>
         </div>
-      </div>
+    </div>
 
-      {/* Row 4: Producer sliders + Generate + Refresh */}
-      <div style={{ display:"flex", flexWrap:"wrap", gap:12, alignItems:"center" }}>
-        <div style={{
-          display:"flex", alignItems:"center", gap:14,
-          background:"rgba(16,24,40,0.68)", borderRadius:12,
-          padding:"10px 14px", flex:1, minWidth:280, flexWrap:"wrap"
-        }}>
+    {/* ── AI Producer sliders + Generate ──────────────────────────────── */}
+    <div className="jf-card" style={{ width: "100%", padding: 16, display:"flex", flexDirection:"column", gap:14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 14 }}>
           {[
             { key:"energy",             label:"Energy",  value:aiProducerSettings.energy },
             { key:"vocalIntensity",     label:"Vocal",   value:aiProducerSettings.vocalIntensity },
             { key:"arrangementDensity", label:"Density", value:aiProducerSettings.arrangementDensity },
           ].map((ctrl) => (
-            <div key={ctrl.key} style={{ minWidth:100, flex:1 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"white", marginBottom:3 }}>
-                <span>{ctrl.label}</span><span>{ctrl.value}</span>
+            <div key={ctrl.key}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, fontWeight: 700, color:colors.text, marginBottom:4 }}>
+                <span>{ctrl.label}</span><span style={{ color: colors.primary }}>{ctrl.value}</span>
               </div>
               <input type="range" min={0} max={100} value={ctrl.value}
                 onChange={(e) => setAiProducerSettings(prev => ({ ...prev, [ctrl.key]: Number(e.target.value) }))}
-                style={{ width:"100%" }}
+                style={{ width:"100%", accentColor: colors.primary }}
               />
             </div>
           ))}
         </div>
 
+        <div style={{ display: "flex", gap: 10 }}>
         <Button variant="contained"
+          fullWidth
           onClick={() => generateLocalBand(importedSong, bandStyle)}
           sx={{
             borderRadius:999, textTransform:"none", whiteSpace:"nowrap", fontWeight:700,
@@ -2299,27 +2332,15 @@ async function importSong() {
             setImportError("Demo arrangement refreshed.");
             preWarmSamplers(fresh).catch(() => {});
           }}
-          sx={{ borderRadius:3, textTransform:"none", whiteSpace:"nowrap" }}
-        >🎛 Refresh Demo</Button>
+          sx={{ borderRadius:999, textTransform:"none", whiteSpace:"nowrap", borderColor: colors.border, color: colors.text }}
+        >🎛 Refresh</Button>
       </div>
 
     </div>
 
     {/* ── AI Feature Toolbar ─────────────────────────────────────────── */}
-    <div
-        style={{
-            display:    "flex",
-            flexWrap:   "wrap",
-            gap:        10,
-            width:      "90%",
-            maxWidth:   800,
-            alignItems: "center",
-            padding:    "10px 14px",
-            background: "rgba(109,74,255,0.07)",
-            border:     `1px solid ${colors.border}`,
-            borderRadius: 14,
-        }}
-    >
+    <div className="jf-card" style={{ width: "100%", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="jf-hscroll">
         {/* Voice Input */}
         <Button
             variant={voiceRecording ? "contained" : "outlined"}
@@ -2344,42 +2365,12 @@ async function importSong() {
             📷 Scan Chords
         </Button>
 
-        {/* Mood Input */}
-        <input
-            type="text"
-            placeholder="Describe a vibe… e.g. rainy jazz café"
-            value={moodText}
-            onChange={(e) => setMoodText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleParseMood()}
-            style={{
-                flex:         1,
-                minWidth:     160,
-                padding:      "6px 10px",
-                borderRadius: 999,
-                border:       `1px solid ${colors.border}`,
-                fontSize:     12,
-                outline:      "none",
-                background:   "white",
-                color:        colors.text,
-            }}
-        />
-        <Button
-            variant="outlined"
-            size="small"
-            onClick={handleParseMood}
-            disabled={moodLoading || !moodText.trim()}
-            sx={{ borderRadius: 999, textTransform: "none", fontSize: 12,
-                  borderColor: colors.border, color: colors.text }}
-        >
-            {moodLoading ? "…" : "🎨 Vibe"}
-        </Button>
-
         {/* LLM toggle */}
         <Button
             variant={llmEnabled ? "contained" : "outlined"}
             size="small"
             onClick={() => setLlmEnabled((v) => !v)}
-            sx={{ borderRadius: 999, textTransform: "none", fontSize: 11,
+            sx={{ borderRadius: 999, textTransform: "none", fontSize: 12,
                   backgroundColor: llmEnabled ? "#6D4AFF" : "transparent",
                   borderColor: colors.border,
                   color: llmEnabled ? "white" : colors.text }}
@@ -2393,16 +2384,49 @@ async function importSong() {
             size="small"
             onClick={() => setJamPadOpen(true)}
             sx={{ borderRadius: 999, textTransform: "none", fontSize: 12,
-                  backgroundColor: "#FF6B8A" }}
+                  backgroundColor: colors.accent }}
         >
             🎹 Live Jam
         </Button>
+      </div>
+
+      {/* Mood Input */}
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+            type="text"
+            placeholder="Describe a vibe… e.g. rainy jazz café"
+            value={moodText}
+            onChange={(e) => setMoodText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleParseMood()}
+            style={{
+                flex:         1,
+                minWidth:     0,
+                padding:      "8px 12px",
+                borderRadius: 999,
+                border:       `1px solid ${colors.border}`,
+                fontSize:     13,
+                outline:      "none",
+                background:   colors.surface,
+                color:        colors.text,
+            }}
+        />
+        <Button
+            variant="outlined"
+            size="small"
+            onClick={handleParseMood}
+            disabled={moodLoading || !moodText.trim()}
+            sx={{ borderRadius: 999, textTransform: "none", fontSize: 12, flexShrink: 0,
+                  borderColor: colors.border, color: colors.text }}
+        >
+            {moodLoading ? "…" : "🎨 Vibe"}
+        </Button>
+      </div>
     </div>
 
     {/* Voice result chip */}
     {voiceResult && (
         <div style={{
-            width: "90%", maxWidth: 800,
+            width: "100%", maxWidth: 800,
             padding: "10px 16px", borderRadius: 12,
             background: "rgba(109,74,255,0.1)",
             border: `1px solid ${colors.primary}`,
@@ -2431,7 +2455,7 @@ async function importSong() {
     {/* Mood result chip */}
     {moodResult && (
         <div style={{
-            width: "90%", maxWidth: 800,
+            width: "100%", maxWidth: 800,
             padding: "10px 16px", borderRadius: 12,
             background: moodResult.source === "llm" ? "rgba(0,184,148,0.1)" : "rgba(109,74,255,0.08)",
             border: `1px solid ${moodResult.source === "llm" ? "#00B894" : colors.border}`,
@@ -2574,7 +2598,7 @@ async function importSong() {
     {importedSong && (
       <div
         style={{
-          width: "90%",
+          width: "100%",
           maxWidth: 1000,
           background: "rgba(255,255,255,0.72)",
           border: `1px solid ${colors.border}`,
@@ -2653,155 +2677,37 @@ async function importSong() {
 
 
 
-      {/* Controls */}
-
-      <div
-
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 20
-        }}
-
-      >
-
-
-        {!isPlaying ? (
-
-          <Button
-
-            variant="contained"
-
-            sx={{
-              background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})`,
-              borderRadius: 999,
-              textTransform: "none",
-              fontWeight: 700,
-              fontSize: 15,
-              px: 3.5,
-              py: 1.1,
-              boxShadow: `0 6px 18px ${colors.accent}55`,
-              "&:hover": {
-                boxShadow: `0 8px 22px ${colors.accent}77`,
-              }
-            }}
-
-            disabled={
-                !tracks.some(track => Array.isArray(track.chords) && track.chords.length > 0)
-            }
-
-
-            // onClick={playAllTracks}
-            onClick={startPlayback}
-
-
-          >
-
-            ▶ Play
-
-          </Button>
-
-
-        ) : (
-
-
-          <Button
-
-            variant="contained"
-
-            sx={{
-              backgroundColor: colors.primary,
-              borderRadius: 3,
-              textTransform: "none",
-              fontWeight: 600
-            }}
-
-            onClick={pauseProgression}
-
-          >
-
-            ⏸ Pause
-
-          </Button>
-
-
-        )}
-
-        <Button
-            variant="outlined"
-            onClick={() => setTempoDialogOpen(true)}
-        >
-            ♩ {bpm} BPM
-        </Button>
-
-        <TextField
-            size="small"
-            label="Jam name"
-            value={jamName}
-            onChange={(event) => setJamName(event.target.value)}
-            sx={{ minWidth: 180 }}
-        />
-
-        <Button
-            variant="contained"
-            onClick={saveCurrentJam}
-            disabled={savingJam || tracks.every(track => track.chords.length === 0)}
-            sx={{
-                backgroundColor: colors.primary,
-                borderRadius: 3,
-                textTransform: "none"
-            }}
-        >
-            {savingJam ? "Saving..." : "Save jam"}
-        </Button>
-
-        <Button
-
-          variant="contained"
-
-          sx={{
-            backgroundColor: colors.danger,
-            borderRadius: 3,
-            textTransform: "none"
-          }}
-
-          onClick={stopProgression}
-
-        >
-
-          ■ Stop
-
-        </Button>
-
-
-        <div
+      {/* Add-track shortcut lives with the track list itself now -- the
+          transport controls (play/pause/BPM/save/stop) moved to the sticky
+          bottom bar below so they're always reachable, not buried mid-scroll
+          and no longer overflowing narrow screens (see the bottom bar near
+          the end of this component). */}
+      <button
         onClick={addTrack}
         style={{
-            width:70,
-            height:70,
-            border:`2px dashed ${colors.border}`,
-            background:colors.primaryLight,
-            color:colors.primary,
-            borderRadius:12,
-            display:"flex",
-            alignItems:"center",
-            justifyContent:"center",
-            fontSize:40,
-            cursor:"pointer"
+          width: "100%",
+          maxWidth: 640,
+          border: `2px dashed ${colors.border}`,
+          background: colors.primaryLight,
+          color: colors.primary,
+          borderRadius: 14,
+          padding: "10px 14px",
+          fontSize: 14,
+          fontWeight: 700,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
         }}
-        >
-        +
-        </div>
-
-
-
-
-      </div>
+      >
+        <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Add track
+      </button>
 
       {/* ── Intelligence Banner ─────────────────────────────────────────── */}
       {theoryMeta && (
         <div style={{
-          width: "90%", maxWidth: 800,
+          width: "100%", maxWidth: 800,
           background: "rgba(109,74,255,0.07)",
           border: `1px solid ${colors.border}`,
           borderRadius: 14,
@@ -2872,7 +2778,7 @@ async function importSong() {
       {isPlaying && currentSection && (
         <div
             style={{
-                width: "90%",
+                width: "100%",
                 maxWidth: 800,
                 padding: "16px 20px",
                 borderRadius: 12,
@@ -2904,7 +2810,7 @@ async function importSong() {
       {savedJams.length > 0 && (
         <div
           style={{
-            width: "90%",
+            width: "100%",
             maxWidth: 1000,
             background: "rgba(255,255,255,0.72)",
             border: `1px solid ${colors.border}`,
@@ -2957,71 +2863,57 @@ async function importSong() {
 
       {/* Chords */}
 
-
         <div
         style={{
         display:"flex",
         flexDirection:"column",
-        gap:20,
-        width: window.innerWidth < 768 ? "95%" : "90%",
-        maxWidth:1000,
+        gap:14,
+        width: "100%",
         position:"relative",
-        overflowX:"visible"
         }}
         >
 
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-            alignItems: "center",
-            marginBottom: 4
-          }}
-        >
-          {tracks.slice(0, 6).map((track, index) => (
-            <div
+        <div className="jf-hscroll" style={{ marginBottom: 2 }}>
+          {tracks.map((track) => (
+            <button
               key={`band-${track.id}`}
+              onClick={() => setSelectedTrack(track.id)}
               style={{
-                padding: "6px 10px",
+                padding: "6px 12px",
                 borderRadius: 999,
-                background: track.color || colors.primaryLight,
-                color: "white",
-                fontSize: 11,
+                background: selectedTrack === track.id ? (track.color || colors.primary) : colors.surface,
+                color: selectedTrack === track.id ? "white" : colors.text,
+                fontSize: 12,
                 fontWeight: 700,
-                opacity: 0.95,
-                border: `1px solid ${track.color || colors.primary}`
+                border: `1.5px solid ${track.color || colors.primary}`,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
               }}
             >
               {track.name}
-            </div>
+            </button>
           ))}
         </div>
-
-
 
         {
         tracks.map(track=>(
 
         <div
         key={track.id}
+        className="jf-card"
         onClick={()=>{ setSelectedTrack(track.id) }}
         style={{
-            display:"flex",
-            flexDirection: window.innerWidth < 768 ? "column" : "row",
-            alignItems: window.innerWidth < 768 ? "stretch" : "flex-start",
-            gap:10,
-            padding:10,
-            borderRadius:12,
-            borderLeft:`6px solid ${track.color}`,
-            background: selectedTrack === track.id ? `${track.color}22` : "transparent",
-            minWidth: 0,
-            flexWrap: "wrap",
-            overflowX: "auto",
+            width: "100%",
+            overflow: "hidden",
+            border: selectedTrack === track.id ? `1.5px solid ${track.color}` : `1px solid ${colors.border}`,
+            boxShadow: selectedTrack === track.id ? `0 8px 24px ${track.color}33` : "var(--jf-shadow-card)",
         }}
         >
+        <div style={{ height: 4, background: track.color }} />
+        <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
 
-
+        {/* Header: name + reserved tag + mute/solo/loop */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
         <div
             onClick={(e)=>{
 
@@ -3033,12 +2925,16 @@ async function importSong() {
             }}
 
             style={{
-                width:120,
+                flex: 1,
+                minWidth: 0,
                 fontWeight:700,
+                fontFamily: colors.fontDisplay,
+                fontSize: 14,
                 color:colors.text,
                 cursor:"pointer",
-                padding:8,
-                borderRadius:8
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
             }}
 
             >
@@ -3047,156 +2943,57 @@ async function importSong() {
                 <div style={{
                     fontSize: 10,
                     color: colors.primary,
-                    marginTop: 4,
+                    marginTop: 2,
                     fontWeight: 800,
-                    textTransform: "uppercase"
+                    textTransform: "uppercase",
+                    whiteSpace: "normal",
                 }}>
-                    (Reserved for You)
+                    Reserved for you
                 </div>
             )}
         </div>
 
-        <div
-            style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 8,
-                opacity: track.reservedForUser ? 0.4 : 1,
-                pointerEvents: track.reservedForUser ? "none" : "auto"
-            }}
-        >
-            <TextField
-                select
-                size="small"
-                value={track.instrument || "acoustic_grand_piano"}
-                onChange={(e) => {
-                    e.stopPropagation();
-                    changeTrackInstrument(track.id, e.target.value);
-                }}
-                sx={{
-                    minWidth: window.innerWidth < 768 ? "100%" : 170,
-                    backgroundColor: "white",
-                    borderRadius: 1
-                }}
-            >
-                {instrumentCatalog.map(inst => (
-                    <MenuItem
-                        key={inst.value}
-                        value={inst.value}
-                        disabled={inst.status === "planned"}
-                    >
-                        {inst.label}
-                        {inst.status === "planned" ? " (next)" : ""}
-                    </MenuItem>
-                ))}
-            </TextField>
-
-            <Slider
-                orientation="vertical"
-                min={0}
-                max={1}
-                step={0.01}
-                value={track.volume}
-                onChange={(e, value) => {
-                    e.stopPropagation();
-                    changeTrackVolume(track.id, value);
-                }}
-                sx={{
-                    height: 90,
-                    color: colors.primary
-                }}
-            />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 92 }}>
-            {Array.isArray(track.sectionLabels) && track.sectionLabels.length > 0 && (
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", maxWidth: 120 }}>
-                    {track.sectionLabels.map((section) => (
-                        <span key={`${track.id}-${section}`} style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            padding: "3px 7px",
-                            borderRadius: 999,
-                            background: section === "Chorus" ? "rgba(109,74,255,0.16)" : "rgba(16,24,40,0.06)",
-                            color: section === "Chorus" ? colors.primary : colors.text,
-                            fontSize: 10,
-                            fontWeight: 800,
-                            letterSpacing: 0.4,
-                            textTransform: "uppercase",
-                        }}>
-                            {section}
-                        </span>
-                    ))}
-                </div>
-            )}
-        </div>
-
-    <div
-        style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 6
-        }}
-    >
-
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         {/* Mute */}
-        <Button
-            size="small"
-            variant="contained"
-            sx={{
-                backgroundColor:
-                    track.muted
-                        ? "#999"
-                        : colors.primary,
-                minWidth: 50
+        <button
+            style={{
+                width: 34, height: 34, borderRadius: "50%", border: "none", cursor: "pointer",
+                background: track.muted ? "#C7C2D6" : colors.primary,
+                color: "white", fontSize: 14,
             }}
             onClick={(e) => {
                 e.stopPropagation();
                 toggleMuteTrack(track.id);
             }}
+            aria-label={track.muted ? "Unmute" : "Mute"}
         >
             {track.muted ? "🔇" : "🔊"}
-        </Button>
+        </button>
 
-        <Button
-            size="small"
-            variant={track.solo ? "contained" : "outlined"}
-            sx={{
-                minWidth: 50,
-                backgroundColor: track.solo ? "#FF6B8A" : "transparent",
-                borderColor: track.solo ? "#FF6B8A" : colors.border,
+        <button
+            style={{
+                width: 34, height: 34, borderRadius: "50%", cursor: "pointer",
+                background: track.solo ? colors.accent : "transparent",
+                border: `1.5px solid ${track.solo ? colors.accent : colors.border}`,
                 color: track.solo ? "white" : colors.text,
+                fontSize: 10, fontWeight: 800,
             }}
             onClick={(e) => {
                 e.stopPropagation();
                 toggleSoloTrack(track.id);
             }}
         >
-            {track.solo ? "Solo" : "Solo"}
-        </Button>
-
+            S
+        </button>
 
         {/* Loop */}
-        <Button
-            size="small"
-            variant="outlined"
-            sx={{
-                minWidth: 50,
-                width: 50,
-                height: 32,
-                padding: 0,
-
-                color:
-                    track.loop === false
-                        ? "#999"
-                        : colors.primary,
-
-                borderColor:
-                    track.loop === false
-                        ? "#ccc"
-                        : colors.border
+        <button
+            style={{
+                width: 34, height: 34, borderRadius: "50%", cursor: "pointer",
+                border: `1.5px solid ${track.loop === false ? "#ccc" : colors.border}`,
+                background: "transparent",
+                color: track.loop === false ? "#999" : colors.primary,
+                display: "flex", alignItems: "center", justifyContent: "center",
             }}
 
             onClick={(e) => {
@@ -3227,15 +3024,86 @@ async function importSong() {
                     />
                 )}
             </span>
-        </Button>
+        </button>
+        </div>
+        </div>
 
+        {/* Instrument + volume */}
+        <div
+            style={{
+                display: "flex",
+                gap: 10,
+                alignItems: "center",
+                opacity: track.reservedForUser ? 0.4 : 1,
+                pointerEvents: track.reservedForUser ? "none" : "auto"
+            }}
+        >
+            <TextField
+                select
+                size="small"
+                value={track.instrument || "acoustic_grand_piano"}
+                onChange={(e) => {
+                    e.stopPropagation();
+                    changeTrackInstrument(track.id, e.target.value);
+                }}
+                sx={{
+                    flex: 1,
+                    minWidth: 0,
+                    backgroundColor: colors.surface,
+                    borderRadius: 1
+                }}
+            >
+                {instrumentCatalog.map(inst => (
+                    <MenuItem
+                        key={inst.value}
+                        value={inst.value}
+                        disabled={inst.status === "planned"}
+                    >
+                        {inst.label}
+                        {inst.status === "planned" ? " (next)" : ""}
+                    </MenuItem>
+                ))}
+            </TextField>
 
+            <div style={{ display: "flex", alignItems: "center", gap: 6, width: 96, flexShrink: 0 }}>
+                <span style={{ fontSize: 13, opacity: 0.6 }}>🔈</span>
+                <Slider
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={track.volume}
+                    onChange={(e, value) => {
+                        e.stopPropagation();
+                        changeTrackVolume(track.id, value);
+                    }}
+                    sx={{
+                        color: colors.primary
+                    }}
+                />
+            </div>
+        </div>
 
-
-    </div>
-
-
-
+        {Array.isArray(track.sectionLabels) && track.sectionLabels.length > 0 && (
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {track.sectionLabels.map((section) => (
+                    <span key={`${track.id}-${section}`} style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "3px 7px",
+                        borderRadius: 999,
+                        background: section === "Chorus" ? "rgba(109,74,255,0.16)" : "rgba(16,24,40,0.06)",
+                        color: section === "Chorus" ? colors.primary : colors.text,
+                        fontSize: 10,
+                        fontWeight: 800,
+                        letterSpacing: 0.4,
+                        textTransform: "uppercase",
+                    }}>
+                        {section}
+                    </span>
+                ))}
+            </div>
+        )}
 
         <div
             style={{
@@ -3393,23 +3261,25 @@ async function importSong() {
         +
         </div>
 
-
-
         </div>
 
-
-        <Button
-            color="error"
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button
             onClick={(e)=>{
             e.stopPropagation();
             deleteTrack(track.id);
             }}
+            style={{
+                background: "none", border: "none", cursor: "pointer",
+                color: colors.textSoft, fontSize: 11, fontWeight: 600,
+                padding: "4px 6px",
+            }}
             >
-            Delete
-            </Button>
+            Delete track
+            </button>
+        </div>
 
-
-
+        </div>
         </div>
 
         ))
@@ -4431,7 +4301,114 @@ async function importSong() {
 
 </Menu>
 
+    </div>
+    {/* end scrollable content column */}
 
+    {/* ── Sticky bottom transport bar ─────────────────────────────────────
+        Play/Pause, BPM, Save, Stop used to live inline mid-scroll in a
+        non-wrapping flex row -- on a real phone width that row ran off the
+        right edge (Save/Live Jam got clipped). Pinning it to the bottom as
+        a compact icon bar keeps it always reachable and always fits. */}
+    <div
+      style={{
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 50,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "10px 14px calc(10px + env(safe-area-inset-bottom))",
+        background: "rgba(255,255,255,0.92)",
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)",
+        borderTop: `1px solid ${colors.border}`,
+        boxShadow: "0 -10px 28px rgba(124,58,237,0.14)",
+      }}
+    >
+      {!isPlaying ? (
+        <button
+          onClick={startPlayback}
+          disabled={!tracks.some(track => Array.isArray(track.chords) && track.chords.length > 0)}
+          style={{
+            width: 52, height: 52, borderRadius: "50%", flexShrink: 0,
+            border: "none", cursor: "pointer",
+            background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})`,
+            color: "white", fontSize: 20,
+            boxShadow: `0 6px 16px ${colors.accent}55`,
+            opacity: !tracks.some(track => Array.isArray(track.chords) && track.chords.length > 0) ? 0.4 : 1,
+          }}
+          aria-label="Play"
+        >▶</button>
+      ) : (
+        <button
+          onClick={pauseProgression}
+          style={{
+            width: 52, height: 52, borderRadius: "50%", flexShrink: 0,
+            border: "none", cursor: "pointer",
+            background: colors.primary, color: "white", fontSize: 20,
+            boxShadow: `0 6px 16px ${colors.primary}55`,
+          }}
+          aria-label="Pause"
+        >⏸</button>
+      )}
+
+      <button
+        onClick={stopProgression}
+        style={{
+          width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+          border: "none", cursor: "pointer",
+          background: colors.danger, color: "white", fontSize: 15,
+        }}
+        aria-label="Stop"
+      >■</button>
+
+      <button
+        onClick={() => setTempoDialogOpen(true)}
+        style={{
+          height: 40, borderRadius: 999, flexShrink: 0,
+          border: `1px solid ${colors.border}`, background: colors.surface,
+          color: colors.text, fontWeight: 700, fontSize: 13, padding: "0 12px",
+          cursor: "pointer",
+        }}
+      >♩ {bpm}</button>
+
+      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
+        {jamNameEditorOpen ? (
+          <TextField
+            size="small"
+            autoFocus
+            value={jamName}
+            onChange={(event) => setJamName(event.target.value)}
+            onBlur={() => setJamNameEditorOpen(false)}
+            onKeyDown={(e) => e.key === "Enter" && setJamNameEditorOpen(false)}
+            sx={{ width: "100%" }}
+          />
+        ) : (
+          <button
+            onClick={() => setJamNameEditorOpen(true)}
+            style={{
+              width: "100%", textAlign: "left", background: "none", border: "none",
+              cursor: "pointer", color: colors.textSoft, fontSize: 12, fontWeight: 600,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: 0,
+            }}
+          >✎ {jamName || "Name this jam"}</button>
+        )}
+      </div>
+
+      <button
+        onClick={saveCurrentJam}
+        disabled={savingJam || tracks.every(track => track.chords.length === 0)}
+        style={{
+          height: 40, borderRadius: 999, flexShrink: 0,
+          border: "none", cursor: "pointer",
+          background: colors.primary, color: "white", fontWeight: 700, fontSize: 13,
+          padding: "0 16px",
+          opacity: (savingJam || tracks.every(track => track.chords.length === 0)) ? 0.5 : 1,
+        }}
+      >{savingJam ? "Saving…" : "Save"}</button>
+    </div>
 
     </div>
 

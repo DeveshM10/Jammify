@@ -25,3 +25,14 @@ dist-ssr
 
 .vercel
 .env*
+
+# Android (Capacitor) -- keep the project scaffold, drop generated build output
+android/.gradle
+android/build
+android/app/build
+android/capacitor-cordova-android-plugins/build
+android/local.properties
+android/.idea
+android/**/*.apk
+android/**/.cxx
+

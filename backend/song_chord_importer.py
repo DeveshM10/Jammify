@@ -12,6 +12,35 @@ USER_AGENT = (
     "Chrome/124.0 Safari/537.36"
 )
 
+# One lyric/chord line is treated as one bar of music. This is the standard
+# convention Ultimate Guitar transcribers follow for chords-over-lyrics sheets,
+# and it's what lets us recover real chord *duration* instead of treating
+# every [ch] tag as an identical 1-beat blip regardless of how long the tab
+# actually holds it.
+BEATS_PER_LINE = 4
+
+CHORD_TAG_RE = re.compile(r"\[ch\](.*?)\[/ch\]", re.IGNORECASE | re.DOTALL)
+TAB_BLOCK_RE = re.compile(r"\[tab\](.*?)\[/tab\]", re.IGNORECASE | re.DOTALL)
+SECTION_HEADER_RE = re.compile(r"^\[([A-Za-z][A-Za-z0-9 \-'/]*)\]$")
+REPEAT_SUFFIX_RE = re.compile(r"[xX]\s*(\d+)\s*$")
+
+# Ultimate Guitar section names collapsed down to the three buckets the
+# arrangement engine understands (Verse / Chorus / Bridge dynamics).
+SECTION_NAME_MAP = {
+    "chorus": "Chorus",
+    "refrain": "Chorus",
+    "hook": "Chorus",
+    "pre-chorus": "Verse",
+    "prechorus": "Verse",
+    "verse": "Verse",
+    "intro": "Verse",
+    "outro": "Verse",
+    "instrumental": "Verse",
+    "interlude": "Verse",
+    "solo": "Verse",
+    "bridge": "Bridge",
+}
+
 
 def fetch_page(url: str) -> str:
     """
@@ -121,44 +150,142 @@ def extract_wiki_content(html: str) -> str:
     return raw_content
 
 
-def extract_chords_from_content(content: str):
+def _clean_chord_name(raw: str) -> str:
+    return re.sub(r"\s+", "", raw.strip())
+
+
+def _normalize_section_name(raw: str) -> str:
+    key = raw.strip().lower()
+    return SECTION_NAME_MAP.get(key, "Verse")
+
+
+def _chords_from_tab_block(block: str, section: str):
     """
-    Extract Ultimate Guitar [ch]...[/ch] chord tags.
+    Parse one [tab]...[/tab] block: a chord line (one or more [ch] tags,
+    left-padded with spaces to visually align above the lyric line beneath)
+    followed by the lyric line itself.
 
-    Example:
-
-        [ch]Am[/ch]
-        [ch]E+[/ch]
-        [ch]Fmaj7[/ch]
-
-    becomes:
-
-        ["Am", "E+", "Fmaj7"]
+    The character column each chord tag sits at, measured against the length
+    of the lyric line, tells us what *fraction* of the bar that chord holds
+    for -- a chord written above the first word of a line is held far longer
+    than one written just before the last syllable.
     """
 
-    chords = re.findall(
-        r"\[ch\](.*?)\[/ch\]",
-        content,
-        flags=re.IGNORECASE | re.DOTALL
-    )
+    lines = [ln for ln in re.split(r"\r\n|\r|\n", block) if ln.strip() != ""]
+
+    chord_positions = []  # (start_col, chord_name)
+    lyric_len = 0
+
+    for line in lines:
+        tags = list(CHORD_TAG_RE.finditer(line))
+        if tags:
+            # This is a chord line -- strip the [ch]/[/ch] wrappers so the
+            # remaining text's column positions match where the chord names
+            # visually sit above the lyric line.
+            stripped = CHORD_TAG_RE.sub(lambda m: _clean_chord_name(m.group(1)), line)
+            cursor = 0
+            for tag in tags:
+                name = _clean_chord_name(tag.group(1))
+                if not name:
+                    continue
+                col = stripped.find(name, cursor)
+                if col == -1:
+                    col = cursor
+                chord_positions.append([col, name])
+                cursor = col + len(name)
+            lyric_len = max(lyric_len, len(stripped))
+        else:
+            # A lyric line (no chords on it) -- its length is what we divide
+            # the preceding chord line's columns against.
+            lyric_len = max(lyric_len, len(line.rstrip()))
+
+    if not chord_positions:
+        return []
+
+    lyric_len = max(lyric_len, chord_positions[-1][0] + 1)
 
     result = []
+    for i, (col, name) in enumerate(chord_positions):
+        next_col = chord_positions[i + 1][0] if i + 1 < len(chord_positions) else lyric_len
+        span = max(1, next_col - col)
+        beats = max(1, round((span / lyric_len) * BEATS_PER_LINE))
+        result.append({"name": name, "beats": beats, "section": section})
 
-    for chord in chords:
+    return result
 
-        chord = chord.strip()
 
-        if not chord:
+def _chords_from_freeform_line(line: str, section: str):
+    """
+    Parse a bare chord line outside a [tab] block, e.g. an instrumental
+    break: "[ch]C[/ch] [ch]F[/ch] [ch]Am[/ch] [ch]G[/ch] x2".
+
+    There's no lyric line to weigh column positions against here, so each
+    chord is assumed to hold for a full bar -- the standard convention for
+    a plain progression listing -- and a trailing "xN" repeats the whole
+    phrase N times.
+    """
+
+    tags = list(CHORD_TAG_RE.finditer(line))
+    if not tags:
+        return []
+
+    names = [_clean_chord_name(t.group(1)) for t in tags]
+    names = [n for n in names if n]
+    if not names:
+        return []
+
+    remainder = line[tags[-1].end():]
+    repeat_match = REPEAT_SUFFIX_RE.search(remainder)
+    repeat_count = int(repeat_match.group(1)) if repeat_match else 1
+    repeat_count = max(1, min(repeat_count, 8))  # sanity cap
+
+    one_pass = [{"name": n, "beats": BEATS_PER_LINE, "section": section} for n in names]
+    return one_pass * repeat_count
+
+
+def extract_chords_from_content(content: str):
+    """
+    Walk the Ultimate Guitar chord sheet top to bottom, tracking section
+    headers ([Verse], [Chorus]/[Refrain], [Bridge], [Instrumental], ...) and
+    reconstructing each chord's real duration from the tab's line layout,
+    instead of treating every [ch] tag as an identical 1-beat hit.
+    """
+
+    current_section = "Verse"
+    result = []
+    cursor = 0
+
+    # Walk [tab]...[/tab] blocks in order, treating any text between them
+    # (section headers, freeform instrumental chord lines) separately.
+    for match in TAB_BLOCK_RE.finditer(content):
+
+        between = content[cursor:match.start()]
+        for raw_line in re.split(r"\r\n|\r|\n", between):
+            line = raw_line.strip()
+            if not line:
+                continue
+            header = SECTION_HEADER_RE.match(line)
+            if header:
+                current_section = _normalize_section_name(header.group(1))
+                continue
+            if "[ch]" in line.lower():
+                result.extend(_chords_from_freeform_line(line, current_section))
+
+        result.extend(_chords_from_tab_block(match.group(1), current_section))
+        cursor = match.end()
+
+    # Trailing content after the last [tab] block.
+    tail = content[cursor:]
+    for raw_line in re.split(r"\r\n|\r|\n", tail):
+        line = raw_line.strip()
+        if not line:
             continue
-
-        # Normalize whitespace.
-        chord = re.sub(
-            r"\s+",
-            "",
-            chord
-        )
-
-        result.append(chord)
+        header = SECTION_HEADER_RE.match(line)
+        if header:
+            current_section = _normalize_section_name(header.group(1))
+            continue
+        if "[ch]" in line.lower():
+            result.extend(_chords_from_freeform_line(line, current_section))
 
     return result
 
@@ -195,31 +322,20 @@ def import_chords_from_url(url: str):
 
     return {
         "title": title,
-        "chords": [
-            {
-                "name": chord,
-                "beats": 1
-            }
-            for chord in chords
-        ]
+        "chords": chords,
     }
 
 
 def main():
 
-    song_url = (
-        "https://tabs.ultimate-guitar.com/"
-        "tab/led-zeppelin/"
-        "stairway-to-heaven-chords-1088573"
-    )
-
-    song_url = "https://tabs.ultimate-guitar.com/tab/elton-john/tiny-dancer-chords-328198"
+    song_url = "https://tabs.ultimate-guitar.com/tab/misc-soundtrack/agent-vinod-raabta-chords-1179968"
 
     result = import_chords_from_url(
         song_url
     )
 
-    print(result)
+    for c in result["chords"]:
+        print(c)
 
 
 if __name__ == "__main__":

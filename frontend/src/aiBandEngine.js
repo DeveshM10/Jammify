@@ -67,6 +67,26 @@ function getSongSections(chords = [], mode = "major") {
   if (!Array.isArray(chords) || chords.length === 0) {
     return [{ name: "Verse", start: 0, end: 0 }];
   }
+
+  // Real song imports carry a `.section` label straight from Ultimate
+  // Guitar's own [Verse]/[Chorus]/[Bridge] tags (see song_chord_importer.py).
+  // That's ground truth -- use it instead of guessing from chord-repetition
+  // fingerprinting, which can't tell Verse and Chorus apart when a song
+  // (like this one) reuses the same progression for both.
+  const taggedCount = chords.filter((c) => c && c.section).length;
+  if (taggedCount === chords.length) {
+    const sections = [];
+    let runStart = 0;
+    for (let i = 1; i <= chords.length; i++) {
+      const changed = i === chords.length || chords[i].section !== chords[runStart].section;
+      if (changed) {
+        sections.push({ name: chords[runStart].section, start: runStart, end: i - 1 });
+        runStart = i;
+      }
+    }
+    return sections;
+  }
+
   if (chords.length <= 5) {
     return [{ name: "Verse", start: 0, end: chords.length - 1 }];
   }
