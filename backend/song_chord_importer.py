@@ -24,6 +24,17 @@ TAB_BLOCK_RE = re.compile(r"\[tab\](.*?)\[/tab\]", re.IGNORECASE | re.DOTALL)
 SECTION_HEADER_RE = re.compile(r"^\[([A-Za-z][A-Za-z0-9 \-'/]*)\]$")
 REPEAT_SUFFIX_RE = re.compile(r"[xX]\s*(\d+)\s*$")
 
+BPM_RE      = re.compile(r'"bpm"\s*:\s*(\d+)')
+TONALITY_RE = re.compile(r'"tonality"\s*:\s*"([^"]*)"')
+CAPO_RE     = re.compile(r'"capo"\s*:\s*(\d+)')
+
+NOTE_TO_PC = {
+    "C": 0, "B#": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3,
+    "E": 4, "Fb": 4, "F": 5, "E#": 5, "F#": 6, "Gb": 6, "G": 7,
+    "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11, "Cb": 11,
+}
+PC_TO_SHARP_NAME = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
 # Ultimate Guitar section names collapsed down to the three buckets the
 # arrangement engine understands (Verse / Chorus / Bridge dynamics).
 SECTION_NAME_MAP = {
@@ -290,6 +301,84 @@ def extract_chords_from_content(content: str):
     return result
 
 
+def extract_song_metadata(html: str):
+    """
+    Ultimate Guitar embeds real tempo and key data on the same page as the
+    chord sheet -- a "strummings" array (community-contributed strum
+    patterns, each carrying a real bpm) and a "meta" object with the song's
+    actual tonality and capo position. None of this was being read before;
+    every import fell back to a generic default tempo and a from-scratch
+    guessed key regardless of what Ultimate Guitar already knew.
+
+    Not every tab has strumming-pattern data (it's community-contributed,
+    so less-visited tabs can lack it entirely) -- bpm is None when absent.
+    """
+
+    decoded = html_lib.unescape(html)
+
+    bpm_match = BPM_RE.search(decoded)
+    bpm = int(bpm_match.group(1)) if bpm_match else None
+
+    tonality_match = TONALITY_RE.search(decoded)
+    tonality = tonality_match.group(1) or None if tonality_match else None
+
+    capo_match = CAPO_RE.search(decoded)
+    capo = int(capo_match.group(1)) if capo_match else 0
+
+    return {"bpm": bpm, "tonality": tonality, "capo": capo}
+
+
+def _transpose_note_name(name: str, semitones: int) -> str:
+    """
+    Shift a single note name (e.g. "F#", "Bb") up by `semitones`,
+    preferring sharps for the result (matches the frontend's own
+    normalizeRoot() convention in aiBandEngine.js).
+    """
+
+    match = re.match(r"^([A-G])([#b]?)(.*)$", name)
+    if not match:
+        return name
+
+    letter, accidental, rest = match.groups()
+    pc = NOTE_TO_PC.get(letter + accidental)
+    if pc is None:
+        return name
+
+    new_pc = (pc + semitones) % 12
+    return PC_TO_SHARP_NAME[new_pc] + rest
+
+
+def _transpose_chord_symbol(symbol: str, semitones: int) -> str:
+    """Transpose one chord symbol's root, keeping its quality suffix intact."""
+    match = re.match(r"^([A-G])([#b]?)(.*)$", symbol)
+    if not match:
+        return symbol
+    letter, accidental, suffix = match.groups()
+    return _transpose_note_name(letter + accidental, semitones) + suffix
+
+
+def transpose_chord_name(name: str, semitones: int) -> str:
+    """
+    Transpose a full chord symbol -- root, quality suffix, and slash bass
+    note if present -- up by `semitones`. A capo shifts the actual sounding
+    pitch above whatever's written in the chart (that's the whole point of
+    a capo: play familiar open shapes, sound in a different key), so a
+    chart written for "capo 3" with a G chord actually SOUNDS a minor third
+    higher, at Bb. Playing the literal written chord name back as audio
+    without this transform means a capo'd song is in the wrong key by
+    construction, regardless of how accurate everything else is.
+    """
+
+    if semitones == 0:
+        return name
+
+    if "/" in name:
+        top, bass = name.split("/", 1)
+        return f"{_transpose_chord_symbol(top, semitones)}/{_transpose_chord_symbol(bass, semitones)}"
+
+    return _transpose_chord_symbol(name, semitones)
+
+
 def import_chords_from_url(url: str):
 
     parsed = urlparse(url)
@@ -320,9 +409,27 @@ def import_chords_from_url(url: str):
             "No chords were found in the song."
         )
 
+    metadata = extract_song_metadata(html)
+    capo = metadata["capo"]
+
+    if capo:
+        for chord in chords:
+            chord["name"] = transpose_chord_name(chord["name"], capo)
+
+    key = metadata["tonality"]
+    if key and capo:
+        key = transpose_chord_name(key, capo)
+
     return {
         "title": title,
         "chords": chords,
+        # None when Ultimate Guitar has no community-contributed strumming
+        # pattern for this tab (bpm) or no tonality set (key) -- the caller
+        # falls back to its own genre-based guess / chord-based key
+        # detection in that case, same as before this existed.
+        "bpm": metadata["bpm"],
+        "key": key,
+        "capo": capo,
     }
 
 

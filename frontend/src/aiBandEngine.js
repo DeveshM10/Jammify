@@ -23,6 +23,7 @@ import {
   getScaleNotes,
   chordRootToPc,
   CHROMATIC,
+  parseKnownKey,
 } from "./musicTheory.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -757,7 +758,12 @@ export function buildBandFromSong(
 
   // ── Theory engine ────────────────────────────────────────────────────────
   const chordNames = songChords.map((c) => c.name);
-  const theoryResult = analyzeProgression(chordNames);
+  // safeSong.key is Ultimate Guitar's own stated key (see song_chord_importer.py),
+  // when it has one -- real data beats a from-chords guess, so it skips
+  // detectKey() entirely in analyzeProgression() rather than being just
+  // another heuristic input.
+  const knownKey = parseKnownKey(safeSong.key);
+  const theoryResult = analyzeProgression(chordNames, knownKey);
   const { tonic, mode, confidence, analyses: chordAnalyses, pattern, modulation } = theoryResult;
 
   // Choose style: theory-based unless caller passed an explicit valid style.
@@ -783,6 +789,11 @@ export function buildBandFromSong(
       : null,
     confidencePct: Math.round(confidence * 100),
     resolvedStyle,
+    // true when tonic/mode came from Ultimate Guitar's own stated key
+    // rather than being guessed from the chords (confidence is 1 either
+    // way it's set above, but this says *why* -- useful for the UI banner
+    // to distinguish "we're sure" from "we're sure because it's real data").
+    keyIsReal: !!knownKey,
   };
 
   // Lead pattern: preserve imported durations for melody/rhythm instruments.

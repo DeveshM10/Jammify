@@ -622,11 +622,39 @@ export function resolveVoiceLeading(chordNames, tonic, mode = "major", sections 
  * analyzeProgression(chordNames)
  * -> { tonic, mode, confidence, analyses, pattern, modulation }
  *
+ * parseKnownKey(keyString) -> { tonic, mode } | null
+ *
+ * Ultimate Guitar's own page metadata sometimes states the song's real key
+ * directly (e.g. "A", "Bm", "F#m") -- ground truth, not a guess. Parses that
+ * short form into the same {tonic, mode} shape detectKey() produces.
+ */
+export function parseKnownKey(keyString) {
+  if (!keyString || typeof keyString !== "string") return null;
+
+  const match = keyString.trim().match(/^([A-G][#b]?)(m|min|minor)?$/i);
+  if (!match) return null;
+
+  const tonicPc = chordRootToPc(match[1]);
+  if (tonicPc === null) return null;
+
+  return {
+    tonic: CHROMATIC[tonicPc],
+    mode: match[2] ? "minor" : "major",
+  };
+}
+
+/**
  * Complete pipeline:
  *   detectKey -> resolveVoiceLeading -> detectProgressionPattern -> detectModulation
+ *
+ * knownKey (optional): a real {tonic, mode} from parseKnownKey() -- when
+ * given, this skips the from-chords key GUESS entirely and analyzes against
+ * the song's actual stated key instead.
  */
-export function analyzeProgression(chordNames) {
-  const { tonic, mode, confidence } = detectKey(chordNames);
+export function analyzeProgression(chordNames, knownKey = null) {
+  const { tonic, mode, confidence } = knownKey
+    ? { tonic: knownKey.tonic, mode: knownKey.mode, confidence: 1 }
+    : detectKey(chordNames);
 
   // Pass sections to voice leading for boundary-aware jumps
   const analyses   = resolveVoiceLeading(chordNames, tonic, mode);

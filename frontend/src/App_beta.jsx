@@ -2153,9 +2153,28 @@ async function importSong() {
     // wrong note to the wrong chord, so a fresh import clears it.
     humMelodyRef.current = null;
     setHumMelody(null);
+
+    // Ultimate Guitar sometimes states the song's REAL tempo directly (a
+    // community-contributed strumming pattern's bpm) -- ground truth, not
+    // a guess, so it always wins over both the previous BPM and the
+    // genre-based fallback generateLocalBand applies when this is absent.
+    let freshImportStatusMessage;
+    if (data.bpm) {
+      setBpm(String(data.bpm));
+      bpmManuallySetRef.current = true;
+      freshImportStatusMessage = `AI arrangement generated locally. Real tempo from Ultimate Guitar: ${data.bpm} BPM.`;
+      if (data.capo) {
+        freshImportStatusMessage += ` Capo ${data.capo} detected -- chords transposed to real sounding pitch.`;
+      }
+    } else {
+      // No community strumming data for this tab -- let generateLocalBand's
+      // genre-based guess apply instead of leaving a stale BPM in place.
+      bpmManuallySetRef.current = false;
+    }
+
     // Let the theory engine auto-detect style from this song's actual chords
     // unless the user has already explicitly chosen one from the dropdown.
-    generateLocalBand(data, styleManuallySetRef.current ? bandStyle : null);
+    generateLocalBand(data, styleManuallySetRef.current ? bandStyle : null, freshImportStatusMessage);
 
   } catch (error) {
     console.error(error);
