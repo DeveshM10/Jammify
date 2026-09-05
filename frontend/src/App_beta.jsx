@@ -1937,29 +1937,14 @@ const generateLocalBand = async (song = importedSong, style = bandStyle, statusM
 
     const hasSong = activeSong && Array.isArray(activeSong.chords) && activeSong.chords.length > 0;
 
-    let plan = null;
-    let nextTracks = null;
-
-    if (hasSong) {
-      try {
-        const chordNames = activeSong.chords
-          .map((entry) => entry?.name || entry)
-          .filter(Boolean);
-
-        plan = await apiJson("/generate-band-plan", {
-          method: "POST",
-          body: JSON.stringify({
-            chords: chordNames,
-            style,
-          }),
-          timeoutMs: 20000,
-        });
-      } catch (apiError) {
-        console.warn("Backend band plan unavailable, using local arranger fallback:", apiError);
-      }
-    }
-
-    nextTracks = hasSong
+    // Arrangement generation is entirely local (aiBandEngine.js + musicTheory.js).
+    // A backend /generate-band-plan endpoint used to be called here too, but its
+    // result was only ever used to (re)populate the intelligence banner, and with
+    // a *less* capable analysis than the local engine already produces (no real
+    // key detection, no Roman numerals, naive section splitting) -- it was a
+    // needless network round-trip that, when it succeeded, actually downgraded
+    // the banner instead of improving it. Removed.
+    let nextTracks = hasSong
       ? buildBandFromSong(activeSong, style, aiBandSelection, aiProducerSettings, arrangementPreset)
       : buildDemoBand(style, aiBandSelection, aiProducerSettings, arrangementPreset);
 
@@ -1999,21 +1984,12 @@ const generateLocalBand = async (song = importedSong, style = bandStyle, statusM
 
     setTracks(nextTracks);
     setSelectedTrack(nextTracks[0]?.id ?? null);
-    setTheoryMeta(
-      plan
-        ? {
-            summary: plan.summary,
-            style: plan.style,
-            sections: plan.sections,
-            source: "local-ai",
-          }
-        : (nextTracks[0]?.theoryMeta || null)
-    );
+    setTheoryMeta(nextTracks[0]?.theoryMeta || null);
 
     if (statusMessage !== undefined) {
       setImportError(statusMessage);
     } else {
-      setImportError(hasSong ? (plan ? "AI arrangement generated locally." : "") : "Demo band loaded. Paste an Ultimate Guitar URL to replace it.");
+      setImportError(hasSong ? "AI arrangement generated locally." : "Demo band loaded. Paste an Ultimate Guitar URL to replace it.");
     }
     preWarmSamplers(nextTracks).catch(() => {});
   } catch (error) {
