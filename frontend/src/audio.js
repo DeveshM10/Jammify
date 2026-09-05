@@ -1,115 +1,92 @@
 // Audio.js
+//
+// Instrument sound source: smplr (https://github.com/danigb/smplr), a
+// dependency-free library of real recorded samples (General MIDI soundfonts,
+// a sampled Steinway grand, sampled electric pianos, and sampled drum
+// machines). Previously this file used a hand-assembled mix of a few local/
+// CDN sample files plus Tone.js synths as fallbacks -- that's exactly what
+// produced the rock_guitar-plays-silence bug (a broken placeholder asset)
+// and the "drums/guitar sound synthesized, not real" complaint (the
+// fallback synths were plain oscillators, not real instrument recordings).
+// smplr replaces all of that with one consistently-sourced, well-tested
+// library instead of us re-curating sample files per instrument.
+//
+// Tone.js is kept only for: unlocking the AudioContext on a user gesture
+// (Tone.start()), the shared AudioContext itself (Tone.getContext()),
+// MIDI-number -> note-name conversion (Tone.Frequency), and the count-in
+// metronome click (a transient click, not a "real instrument" so realism
+// doesn't apply there).
 
 import * as Tone from "tone";
+import { Soundfont, SplendidGrandPiano, ElectricPiano, DrumMachine } from "smplr";
 
 let activeVoices = [];
-let trackGains = {};
+let trackGains = {};   // trackId -> native GainNode
 let trackSamplers = {};
 let initialized = false;
 
-/*
- * The drum voice is a plain Tone.MembraneSynth, not a Tone.Sampler/PolySynth --
- * it has no releaseAll() (only single-voice triggerRelease()). Calling
- * releaseAll() on it throws, so every stop/track-removal path needs to check
- * which release method the instrument actually supports.
- */
-function releaseAllNotes(sampler) {
-    if (typeof sampler.releaseAll === "function") {
-        sampler.releaseAll();
-    } else if (typeof sampler.triggerRelease === "function") {
-        sampler.triggerRelease();
+// ─── Instrument definitions ───────────────────────────────────────────────────
+// Real General MIDI instrument names (from gleitz/midi-js-soundfonts, served
+// by smplr's Soundfont player) or a dedicated sampled-instrument class.
+
+const INSTRUMENT_CONFIG = {
+    acoustic_grand_piano: { kind: "piano" },
+    electric_grand_piano: { kind: "epiano",    name: "WurlitzerEP200" },
+    church_organ:         { kind: "soundfont", name: "church_organ" },
+    finger_bass:          { kind: "soundfont", name: "electric_bass_finger" },
+    rock_guitar:          { kind: "soundfont", name: "overdriven_guitar" },
+    flute:                { kind: "soundfont", name: "flute" },
+    violin:               { kind: "soundfont", name: "violin" },
+    // These were previously marked "planned"/disabled because the old local
+    // sample folders never covered them -- a real GM soundfont covers all of
+    // General MIDI, so they now work like every other instrument.
+    synth_bass:           { kind: "soundfont", name: "synth_bass_1" },
+    string_ensemble:      { kind: "soundfont", name: "string_ensemble_1" },
+    trumpet:              { kind: "soundfont", name: "trumpet" },
+};
+
+// Linn LM-2: a real sampled drum machine with a natural, "real kit" feel
+// (used on a huge amount of 80s pop/rock records) rather than an obviously
+// electronic kit like the TR-808.
+const DRUM_KIT = "LM-2";
+const DRUM_DEFAULT_HIT = "kick";
+
+function getAudioContext() {
+    // Read Tone's context each call rather than caching it -- Tone.start()
+    // (called from unlockAudio) resumes exactly this same singleton context,
+    // so every smplr instrument stays on the one real-time AudioContext.
+    return Tone.getContext().rawContext;
+}
+
+function createSmplrInstrument(config, context, destination) {
+    switch (config.kind) {
+        case "piano":
+            return SplendidGrandPiano(context, { destination });
+        case "epiano":
+            return ElectricPiano(context, { instrument: config.name, destination });
+        case "soundfont":
+        default:
+            return Soundfont(context, { instrument: config.name, destination });
     }
 }
 
-// ─── Instrument definitions ───────────────────────────────────────────────────
-// Only instruments with confirmed working CDN paths are listed.
-// Rock/jazz styles previously assigned synth_bass, string_ensemble, trumpet
-// which 404 on the tonejs CDN — those are remapped in aiBandEngine.js to
-// finger_bass, violin, flute until proper samples are available.
-
-const instrumentUrls = {
-    acoustic_grand_piano: {
-        "C4": "C4.mp3",
-        "D#4": "Ds4.mp3",
-        "F#4": "Fs4.mp3",
-        "A4": "A4.mp3",
-    },
-    electric_grand_piano: {
-        "C4": "C4.mp3",
-        "D#4": "Ds4.mp3",
-        "F#4": "Fs4.mp3",
-        "A4": "A4.mp3",
-    },
-    church_organ: {
-        "C4": "C4.mp3",
-        "F4": "F4.mp3",
-        "A4": "A4.mp3",
-    },
-    finger_bass: {
-        "E2": "E2.mp3",
-        "A2": "A2.mp3",
-        "D3": "D3.mp3",
-        "G3": "G3.mp3",
-    },
-    rock_guitar: {
-        "E2": "E2.wav",
-        "A2": "A2.wav",
-        "D3": "D3.wav",
-        "G3": "G3.wav",
-        "B3": "B3.wav",
-        "E4": "E4.wav",
-    },
-    flute: {
-        "C4": "C4.mp3",
-        "D#4": "Ds4.mp3",
-        "F#4": "Fs4.mp3",
-        "A4": "A4.mp3",
-    },
-    violin: {
-        "C4": "C4.mp3",
-        "D#4": "Ds4.mp3",
-        "F#4": "Fs4.mp3",
-        "A4": "A4.mp3",
-    },
-    // synth_bass, string_ensemble, trumpet are aliased below to working instruments
-    synth_bass: {
-        "E2": "E2.mp3",
-        "A2": "A2.mp3",
-        "D3": "D3.mp3",
-        "G3": "G3.mp3",
-    },
-    string_ensemble: {
-        "C4": "C4.mp3",
-        "D#4": "Ds4.mp3",
-        "F#4": "Fs4.mp3",
-        "A4": "A4.mp3",
-    },
-    trumpet: {
-        "C4": "C4.mp3",
-        "D#4": "Ds4.mp3",
-        "F#4": "Fs4.mp3",
-        "A4": "A4.mp3",
-    },
-};
-
-const baseUrls = {
-    acoustic_grand_piano:  "https://tonejs.github.io/audio/salamander/",
-    electric_grand_piano:  "https://tonejs.github.io/audio/salamander/",
-    church_organ:          "/church_organ/",
-    finger_bass:           "/acoustic_bass/",
-    rock_guitar:           "/rock_guitar/",
-    flute:                 "/flute/",
-    violin:                "/violin/",
-    // Aliases: point to local paths
-    synth_bass:            "/acoustic_bass/",
-    string_ensemble:       "/violin/",
-    trumpet:               "/flute/",
-};
-
+/*
+ * Every instrument smplr ships (Soundfont, SplendidGrandPiano, ElectricPiano,
+ * DrumMachine) implements the same start/stop/dispose/ready API, so unlike
+ * the old Tone.Sampler-vs-Tone.MembraneSynth split, there is no longer a
+ * "does this voice support releaseAll()" question -- .stop() always exists.
+ */
+function releaseAllNotes(sampler) {
+    if (typeof sampler.stop === "function") {
+        sampler.stop();
+    }
+}
 
 /*
  * IMPORTANT:
- * Each TRACK gets its own Sampler or Synth.
+ * Each TRACK gets its own sampled instrument instance, connected straight to
+ * that track's own native GainNode (see getTrackGain) so per-track volume/
+ * mute/solo keeps working exactly as before.
  */
 export async function loadInstrumentForTrack(trackId, instrument) {
     const existing = trackSamplers[trackId];
@@ -119,150 +96,47 @@ export async function loadInstrumentForTrack(trackId, instrument) {
         return existing.sampler;
     }
 
-    if (instrument === "drums") {
-        const drumSynth = new Tone.MembraneSynth({
-            pitchDecay: 0.05,
-            octaves: 4,
-            oscillator: { type: "sine" },
-            envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4 }
-        });
-
-        if (existing) {
-            try { existing.sampler.dispose(); } catch (e) {}
-        }
-        trackSamplers[trackId] = { sampler: drumSynth, instrument: "drums" };
-        return drumSynth;
-    }
-
-    // public/rock_guitar/*.wav are all byte-identical placeholder files that are
-    // pure digital silence (confirmed: peak -90dBFS across the entire file) --
-    // never real recordings. Loading them "succeeds" (valid WAV, no 404), so the
-    // sample-load-failure fallback below never kicks in and rock_guitar plays
-    // nothing. Until real samples replace those files, always use a synthesized
-    // voice instead of the silent sampler.
-    // Note: Tone.PluckSynth cannot be used here -- it doesn't extend Monophonic,
-    // so Tone.PolySynth(Tone.PluckSynth, ...) throws "Voice must extend
-    // Monophonic class" at construction time (this also means the pre-existing
-    // "guitar" 404 fallback further down, which has the same bug, has never
-    // actually worked either). FMSynth is Monophonic-derived and tuned here for
-    // a plucky, slightly overdriven character.
-    if (instrument === "rock_guitar") {
-        const guitarSynth = new Tone.PolySynth(Tone.FMSynth, {
-            harmonicity: 3,
-            modulationIndex: 4,
-            oscillator: { type: "triangle" },
-            modulation: { type: "square" },
-            envelope: { attack: 0.005, decay: 0.3, sustain: 0.05, release: 0.4 },
-            modulationEnvelope: { attack: 0.005, decay: 0.2, sustain: 0, release: 0.3 },
-        });
-
-        if (existing) {
-            try { existing.sampler.dispose(); } catch (e) {}
-        }
-        trackSamplers[trackId] = { sampler: guitarSynth, instrument: "rock_guitar" };
-        return guitarSynth;
-    }
-
-    const safeInstrument = (instrumentUrls[instrument] && baseUrls[instrument])
+    const context = getAudioContext();
+    const destination = getTrackGain(trackId, 0.8);
+    const safeInstrument = instrument === "drums" || INSTRUMENT_CONFIG[instrument]
         ? instrument
         : "acoustic_grand_piano";
 
-    let newSampler;
-    let loadFailed = false;
-
-    // Create new sampler
-    newSampler = new Tone.Sampler({
-        urls:    instrumentUrls[safeInstrument],
-        baseUrl: baseUrls[safeInstrument],
-        release: 0.5,
-    });
-
-    // Wait for the NEW sampler to load completely
-    await new Promise((resolve) => {
-        if (newSampler.loaded) {
-            resolve();
-            return;
-        }
-        newSampler.onload = resolve;
-        // Safety: resolve after 2s max so a 404 doesn't block forever
-        setTimeout(() => {
-            if (!newSampler.loaded) {
-                loadFailed = true;
-            }
-            resolve();
-        }, 2000);
-    });
-
-    // If it failed to load from CDN, create a fallback Synth instead of going silent
-    if (loadFailed) {
-        newSampler.dispose();
-        
-        // Pick a synth based on the requested instrument
-        if (instrument.includes("bass")) {
-            newSampler = new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: 0.5,
-                modulationIndex: 1.2,
-                oscillator: { type: "triangle" },
-                envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 1.5 },
-            });
-        } else if (instrument.includes("organ")) {
-            newSampler = new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: 2,
-                modulationIndex: 0.5,
-                oscillator: { type: "sine" },
-                envelope: { attack: 0.05, decay: 0.1, sustain: 0.8, release: 1 },
-            });
-        } else if (instrument.includes("guitar")) {
-            // Tone.PluckSynth doesn't extend Monophonic, so wrapping it in
-            // Tone.PolySynth throws "Voice must extend Monophonic class" --
-            // use the same FMSynth voice as the rock_guitar special-case above.
-            newSampler = new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: 3,
-                modulationIndex: 4,
-                oscillator: { type: "triangle" },
-                modulation: { type: "square" },
-                envelope: { attack: 0.005, decay: 0.3, sustain: 0.05, release: 0.4 },
-                modulationEnvelope: { attack: 0.005, decay: 0.2, sustain: 0, release: 0.3 },
-            });
-        } else if (instrument.includes("flute") || instrument.includes("violin")) {
-            newSampler = new Tone.PolySynth(Tone.AMSynth, {
-                harmonicity: 1.5,
-                oscillator: { type: "triangle" },
-                envelope: { attack: 0.1, decay: 0.1, sustain: 0.5, release: 1 },
-            });
-        } else {
-            newSampler = new Tone.PolySynth(Tone.Synth, {
-                oscillator: { type: "sawtooth" },
-                envelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 1 },
-            });
-        }
+    let newInstrument;
+    try {
+        newInstrument = safeInstrument === "drums"
+            ? DrumMachine(context, { instrument: DRUM_KIT, destination })
+            : createSmplrInstrument(INSTRUMENT_CONFIG[safeInstrument], context, destination);
+        await newInstrument.ready;
+    } catch (error) {
+        console.warn(`Failed to load instrument "${instrument}", falling back to piano:`, error);
+        newInstrument = SplendidGrandPiano(context, { destination });
+        await newInstrument.ready;
     }
 
-    // Only NOW dispose the old sampler (after new one is ready)
+    // Only NOW dispose the old instrument (after the new one is ready)
     if (existing) {
-        try { 
-            existing.sampler.dispose(); 
-        }
-        catch (e) { 
-            console.warn("Could not dispose old sampler:", e); 
+        try {
+            existing.sampler.dispose();
+        } catch (error) {
+            console.warn("Could not dispose old instrument:", error);
         }
     }
 
-    // Store the new sampler/synth
-    trackSamplers[trackId] = { sampler: newSampler, instrument: safeInstrument };
-    return newSampler;
+    trackSamplers[trackId] = { sampler: newInstrument, instrument: safeInstrument };
+    return newInstrument;
 }
 
 
 /**
  * preWarmSamplers(tracks)
  *
- * Load all samplers for a track list in parallel BEFORE playback starts.
+ * Load all instruments for a track list in parallel BEFORE playback starts.
  * Call this immediately after band generation so that when the user
- * presses Play, all samplers are already loaded and the first beat
+ * presses Play, all samples are already loaded and the first beat
  * fires instantly with no load latency.
  *
- * Returns a Promise that resolves when all samplers are loaded (or timed out).
+ * Returns a Promise that resolves when all instruments are loaded (or failed).
  */
 export async function preWarmSamplers(tracks) {
     if (!Array.isArray(tracks) || tracks.length === 0) return;
@@ -308,7 +182,9 @@ function midiToNote(midi) {
 
 
 /*
- * Create/get a gain node for a track.
+ * Create/get a native GainNode for a track. Plain Web Audio (not Tone) so
+ * that smplr instruments -- which take a native AudioNode as `destination`
+ * at construction time -- can connect straight into it with no bridging.
  */
 function getTrackGain(
     trackId,
@@ -317,13 +193,26 @@ function getTrackGain(
 
     if (!trackGains[trackId]) {
 
-        trackGains[trackId] =
-            new Tone.Gain(volume)
-                .toDestination();
+        const context = getAudioContext();
+        const gainNode = context.createGain();
+        gainNode.gain.value = Number(volume ?? 0.8);
+        gainNode.connect(context.destination);
+        trackGains[trackId] = gainNode;
 
     }
 
     return trackGains[trackId];
+}
+
+
+/*
+ * Ramp a native GainNode's gain smoothly (replaces Tone.Gain's .rampTo()).
+ */
+function rampGain(gainNode, value, duration = 0.04) {
+    const now = gainNode.context.currentTime;
+    gainNode.gain.cancelScheduledValues(now);
+    gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+    gainNode.gain.linearRampToValueAtTime(Number(value), now + duration);
 }
 
 
@@ -342,34 +231,20 @@ export function updateTrackVolume(
         return;
     }
 
-    gain.gain.rampTo(
-        Number(volume),
-        0.05
-    );
+    rampGain(gain, Number(volume), 0.05);
 }
 
 
 /*
  * PLAY CHORD
  *
- * The important part here is:
- *
- *     triggerAttackRelease(notes, duration)
- *
- * instead of:
- *
- *     triggerAttack()
- *     setTimeout(triggerRelease)
- *
- * Tone schedules the release itself.
- *
- * So:
+ * Schedules note(s) via smplr's `instrument.start({ note, time, duration,
+ * velocity })`, which -- like Tone's old triggerAttackRelease(note,
+ * duration, time) -- schedules both the attack and its own release, so:
  *
  * 1 beat  = note lasts 1 beat
  * 2 beats = note lasts 2 beats
  * 4 beats = note lasts 4 beats
- *
- * This fixes multi-beat sustain.
  */
 
 export async function playChord(
@@ -394,26 +269,28 @@ export async function playChord(
 
 
     /*
-     * Load the sampler for this track.
+     * Load the instrument for this track.
      */
-    let sampler;
+    let instrumentVoice;
     try {
-        sampler = await loadInstrumentForTrack(
+        instrumentVoice = await loadInstrumentForTrack(
             trackId,
             instrument
         );
     } catch (error) {
-        console.warn("Sampler load failed:", error);
+        console.warn("Instrument load failed:", error);
         return;
     }
 
-    if (!sampler) {
+    if (!instrumentVoice) {
         return;
     }
 
 
     /*
-     * Get this track's gain.
+     * Get this track's gain and keep it following the
+     * current track volume (it's already connected as
+     * this instrument's `destination` at load time).
      */
     const gain =
         getTrackGain(
@@ -421,31 +298,10 @@ export async function playChord(
             volume
         );
 
-
-    /*
-     * Connect sampler to this track's
-     * gain node.
-     */
-    if (
-        sampler.output &&
-        !sampler.__connectedToTrack
-    ) {
-
-        sampler.connect(gain);
-
-        sampler.__connectedToTrack = true;
-    }
+    rampGain(gain, Number(volume), 0.02);
 
 
-    /*
-     * Make sure volume follows the
-     * current track volume.
-     */
-    gain.gain.rampTo(
-        Number(volume),
-        0.02
-    );
-
+    const context = getAudioContext();
 
     /*
      * Calculate exact chord duration.
@@ -466,29 +322,23 @@ export async function playChord(
         Number(durationBeats);
 
 
+    const isDrums = instrument === "drums";
+
     /*
-     * Convert MIDI numbers to Tone
-     * note names.
+     * Drums are real sampled drum-machine hits addressed by group name
+     * ("kick", "snare", ...), not by pitch -- the MIDI-number pipeline
+     * upstream doesn't carry that information yet, so every hit currently
+     * plays the same real kick sample. (Varying it per pattern subdivision
+     * -- a real kick/snare backbeat -- needs the beat scheduler in
+     * App_beta.jsx to pass through which step is firing; a good next step,
+     * not done here.)
      */
-    let noteNames =
-        notes
-            .map(midiToNote)
-            .filter(Boolean);
+    const noteNames = isDrums
+        ? [DRUM_DEFAULT_HIT]
+        : notes.map(midiToNote).filter(Boolean);
 
     if (noteNames.length === 0) {
         return;
-    }
-
-    /*
-     * The drum voice is a single-voice MembraneSynth, not a polyphonic
-     * sampler -- it can only sound one note at a time. If a multi-note
-     * chord gets assigned to it (now that "Drums" is a selectable
-     * instrument for any chord, not just the AI-generated drum track),
-     * only trigger the first note instead of letting triggerAttackRelease
-     * receive an array it can't handle.
-     */
-    if (instrument === "drums" && noteNames.length > 1) {
-        noteNames = [noteNames[0]];
     }
 
 
@@ -504,6 +354,28 @@ export async function playChord(
             )
         );
 
+    const VELOCITY = 100;
+
+    try {
+
+    /*
+     * ------------------------------------------------
+     * DRUMS
+     * ------------------------------------------------
+     *
+     * Percussive one-shot -- no sustain/duration to control, and only
+     * ever one hit regardless of speed (see noteNames above).
+     */
+    if (isDrums) {
+
+        instrumentVoice.start({
+            note: noteNames[0],
+            time: context.currentTime,
+            velocity: VELOCITY,
+        });
+
+    }
+
 
     /*
      * ------------------------------------------------
@@ -515,13 +387,14 @@ export async function playChord(
      * notes[0] is assumed to be the
      * lowest/bass note of the chord.
      */
-    try {
-    if (normalizedSpeed === 0) {
+    else if (normalizedSpeed === 0) {
 
-        sampler.triggerAttackRelease(
-            noteNames[0],
-            duration
-        );
+        instrumentVoice.start({
+            note: noteNames[0],
+            time: context.currentTime,
+            duration,
+            velocity: VELOCITY,
+        });
 
     }
 
@@ -537,19 +410,16 @@ export async function playChord(
      */
     else if (normalizedSpeed >= 1) {
 
-        /*
-         * Monophonic instruments (the drum MembraneSynth) can't take an
-         * array as a note, even a single-element one -- Tone.Frequency()
-         * can't parse an array, so it silently resolves to null and every
-         * drum hit at speed >= 1 (the drum track's normal case) was being
-         * dropped with a console warning instead of making a sound.
-         * A polyphonic Sampler/PolySynth accepts either form, so unwrapping
-         * a single note here is always safe.
-         */
-        sampler.triggerAttackRelease(
-            noteNames.length === 1 ? noteNames[0] : noteNames,
-            duration
-        );
+        const startTime = context.currentTime;
+
+        noteNames.forEach(note => {
+            instrumentVoice.start({
+                note,
+                time: startTime,
+                duration,
+                velocity: VELOCITY,
+            });
+        });
 
     }
 
@@ -596,14 +466,14 @@ export async function playChord(
 
 
         /*
-         * Use one shared Tone timestamp.
+         * Use one shared timestamp.
          *
          * This is important because it makes
          * all notes schedule accurately relative
          * to the same audio clock.
          */
         const startTime =
-            Tone.now();
+            context.currentTime;
 
 
         /*
@@ -654,11 +524,12 @@ export async function playChord(
                     offset;
 
 
-                sampler.triggerAttackRelease(
+                instrumentVoice.start({
                     note,
-                    noteDuration,
-                    startTime + offset
-                );
+                    time: startTime + offset,
+                    duration: noteDuration,
+                    velocity: VELOCITY,
+                });
 
             }
         );
@@ -671,9 +542,9 @@ export async function playChord(
 
 
     /*
-     * Keep track of this sampler for emergency stopping.
+     * Keep track of this instrument for emergency stopping.
      *
-     * MEMORY LEAK FIX: prune entries whose sampler has been disposed
+     * MEMORY LEAK FIX: prune entries whose instrument has been disposed
      * (trackSamplers[id] no longer references them) before pushing,
      * so the array never grows unboundedly over a long session.
      */
@@ -689,7 +560,7 @@ export async function playChord(
 
     activeVoices.push({
         trackId,
-        sampler
+        sampler: instrumentVoice
     });
 
 }
@@ -783,11 +654,11 @@ export function stopAllNotes() {
 /*
  * playJamChord — for Live Jam Mode.
  *
- * Plays a single chord immediately across a dedicated "jam" sampler.
- * Uses Tone.now() for minimal latency. Stops the previous jam chord first.
+ * Plays a single chord immediately across a dedicated "jam" instrument.
+ * Stops the previous jam chord first.
  *
  * Unlike playChord(), this doesn't need a trackId — it uses a single
- * shared "jam" gain/sampler pair so taps feel instant.
+ * shared "jam" gain/instrument pair so taps feel instant.
  */
 const JAM_TRACK_ID = "__jam__";
 
@@ -797,23 +668,21 @@ export async function playJamChord(midiNotes, durationBeats = 2, bpm = 120, volu
   // Stop previous jam notes immediately
   stopTrackNotes(JAM_TRACK_ID);
 
-  const sampler = await loadInstrumentForTrack(JAM_TRACK_ID, instrument);
-  const gain    = getTrackGain(JAM_TRACK_ID, volume);
+  const instrumentVoice = await loadInstrumentForTrack(JAM_TRACK_ID, instrument);
+  const gain = getTrackGain(JAM_TRACK_ID, volume);
+  rampGain(gain, Number(volume), 0.01);
 
-  if (sampler.output && !sampler.__connectedToTrack) {
-    sampler.connect(gain);
-    sampler.__connectedToTrack = true;
-  }
-
-  gain.gain.rampTo(Number(volume), 0.01);
-
-  const duration  = (60 / bpm) * durationBeats;
-  const noteNames = midiNotes.map(midi => Tone.Frequency(midi, "midi").toNote());
+  const context = getAudioContext();
+  const duration = (60 / bpm) * durationBeats;
+  const noteNames = midiNotes.map(midiToNote).filter(Boolean);
 
   // Schedule immediately for lowest latency
-  sampler.triggerAttackRelease(noteNames, duration, Tone.now());
+  const startTime = context.currentTime;
+  noteNames.forEach(note => {
+    instrumentVoice.start({ note, time: startTime, duration, velocity: 100 });
+  });
 
-  activeVoices.push({ trackId: JAM_TRACK_ID, sampler });
+  activeVoices.push({ trackId: JAM_TRACK_ID, sampler: instrumentVoice });
 }
 
 
@@ -833,11 +702,7 @@ export function muteTrackAudio(trackId, muted, volume = 0.8) {
         return;
     }
 
-    if (muted) {
-        gain.gain.rampTo(0, 0.04);
-    } else {
-        gain.gain.rampTo(Number(volume), 0.04);
-    }
+    rampGain(gain, muted ? 0 : Number(volume), 0.04);
 }
 
 
@@ -864,9 +729,9 @@ export function soloTrackAudio(soloedId, trackVolumes = {}) {
         if (!gain) return;
 
         if (numId === soloedId) {
-            gain.gain.rampTo(Number(trackVolumes[numId] ?? 0.8), 0.04);
+            rampGain(gain, Number(trackVolumes[numId] ?? 0.8), 0.04);
         } else {
-            gain.gain.rampTo(0, 0.04);
+            rampGain(gain, 0, 0.04);
         }
 
     });
@@ -890,7 +755,7 @@ export function unsoloAllAudio(trackVolumes = {}) {
 
         if (!gain) return;
 
-        gain.gain.rampTo(Number(trackVolumes[numId] ?? 0.8), 0.04);
+        rampGain(gain, Number(trackVolumes[numId] ?? 0.8), 0.04);
 
     });
 }
@@ -934,11 +799,11 @@ export function removeTrackAudio(
     if (gain) {
 
         try {
-            gain.dispose();
+            gain.disconnect();
         }
         catch (error) {
             console.warn(
-                "Unable to dispose gain:",
+                "Unable to disconnect gain:",
                 error
             );
         }
@@ -952,11 +817,14 @@ export function removeTrackAudio(
  *
  * Plays a 4-beat metronome count-in to give the user time to get ready.
  * Resolves when the count-in is complete.
+ *
+ * This stays a plain Tone.js synth click (not a smplr instrument) since a
+ * metronome tick isn't standing in for a real instrument -- it's a UI cue.
  */
 export async function playCountIn(bpm) {
     if (!bpm || bpm <= 0) bpm = 120;
     const beatDuration = 60 / bpm;
-    
+
     // Create a sharp, clicking synth for the metronome
     const clickSynth = new Tone.MembraneSynth({
         pitchDecay: 0.01,
@@ -964,9 +832,9 @@ export async function playCountIn(bpm) {
         oscillator: { type: "square" },
         envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 }
     }).toDestination();
-    
+
     const startTime = Tone.now() + 0.1; // Small buffer to ensure timing
-    
+
     // Schedule 4 clicks
     for (let i = 0; i < 4; i++) {
         const time = startTime + (i * beatDuration);
@@ -975,7 +843,7 @@ export async function playCountIn(bpm) {
         const velocity = i === 0 ? 1 : 0.7;
         clickSynth.triggerAttackRelease(note, "32n", time, velocity);
     }
-    
+
     // Wait for the 4 beats to complete before resolving
     return new Promise(resolve => {
         setTimeout(() => {
