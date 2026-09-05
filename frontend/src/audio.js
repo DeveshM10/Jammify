@@ -38,8 +38,16 @@ const INSTRUMENT_CONFIG = {
     church_organ:         { kind: "versilian", name: "Aerophones/Edge-blown Aerophones/Pipe Organ - Loud" },
     finger_bass:          { kind: "soundfont", name: "electric_bass_finger" },
     rock_guitar:          { kind: "soundfont", name: "overdriven_guitar" },
-    flute:                { kind: "soundfont", name: "flute" },
-    violin:               { kind: "soundfont", name: "violin" },
+    // Soundfont supports two source kits: MusyngKite (default) and
+    // FluidR3_GM. Measured directly (offline-rendered RMS): MusyngKite's
+    // violin sample is ~3.5x quieter than every other instrument in the mix
+    // (0.015 vs ~0.04-0.09 RMS elsewhere) and its flute is about half as
+    // loud -- both would get buried under everything else regardless of
+    // per-track volume settings. FluidR3_GM brings both in line with the
+    // rest of the ensemble, with no clipping. overdriven_guitar showed no
+    // such gap (comparable level either way) so it stays on the default kit.
+    flute:                { kind: "soundfont", name: "flute",  kit: "FluidR3_GM" },
+    violin:               { kind: "soundfont", name: "violin", kit: "FluidR3_GM" },
     // These were previously marked "planned"/disabled because the old local
     // sample folders never covered them -- a real GM soundfont covers all of
     // General MIDI, so they now work like every other instrument.
@@ -118,7 +126,7 @@ function createSmplrInstrument(config, context, destination) {
             return Versilian(context, { instrument: config.name, destination });
         case "soundfont":
         default:
-            return Soundfont(context, { instrument: config.name, destination });
+            return Soundfont(context, { instrument: config.name, kit: config.kit, destination });
     }
 }
 
