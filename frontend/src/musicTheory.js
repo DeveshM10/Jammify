@@ -429,10 +429,20 @@ export function chooseStyleFromAnalysis(chordAnalyses, mode = "major") {
     / chordAnalyses.length;
 
   // Dynamic style selection table - both options are now used
-  // Minor mode shifts preference toward the second (darker) option
+  // Minor mode shifts preference toward the second (darker) option.
+  //
+  // Fixed: a stable, mostly-diatonic major-key song with a handful of 7th
+  // chords (e.g. simple I-IV-V-based classic pop/rock) lands right in the
+  // 0.20-0.35 tension band -- that's an extremely common case, and mapping
+  // it to "lo-fi" was a real mismatch (confirmed on a real import: a
+  // well-known anthemic song came out "lo-fi", which routed both Piano and
+  // Rhythm to piano-family instruments with no guitar in the band at all).
+  // "pop" is the far safer, more broadly correct default for ordinary
+  // tertian harmony at low-moderate tension; lo-fi still applies in minor
+  // mode via the *very* lowest band, where the mellow/chill fit is genuine.
   const styleMap = [
     { maxTension: 0.20, major: "acoustic", minor: "lo-fi"     },
-    { maxTension: 0.35, major: "lo-fi",    minor: "cinematic" },
+    { maxTension: 0.35, major: "pop",      minor: "cinematic" },
     { maxTension: 0.50, major: "pop",      minor: "jazz"      },
     { maxTension: 0.65, major: "jazz",     minor: "rock"      },
     { maxTension: 0.78, major: "rock",     minor: "cinematic" },
