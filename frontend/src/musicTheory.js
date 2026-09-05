@@ -440,9 +440,20 @@ export function chooseStyleFromAnalysis(chordAnalyses, mode = "major") {
   // "pop" is the far safer, more broadly correct default for ordinary
   // tertian harmony at low-moderate tension; lo-fi still applies in minor
   // mode via the *very* lowest band, where the mellow/chill fit is genuine.
+  // Fixed: a simple, mostly-diatonic MINOR ballad (plain triads, little to no
+  // 7th/9th color -- exactly what most slow minor-key pop/film ballads are)
+  // landed in the two lowest tension bands, both of which used to map to
+  // "lo-fi" or "cinematic" -- and neither of THOSE style presets puts a
+  // guitar in any role at all (lo-fi's rhythm is piano, cinematic's is
+  // violin). So the single most common minor-key import shape -- a simple
+  // sad ballad -- could never get a real guitar, confirmed on a real import
+  // (a well-known Bollywood ballad came back with no acoustic guitar
+  // anywhere in the band). "acoustic" is the correct default here: it's a
+  // real guitar+piano palette that still suits a mellow minor ballad, and
+  // it now uses an actual acoustic guitar sample (see STYLE_PRESETS).
   const styleMap = [
-    { maxTension: 0.20, major: "acoustic", minor: "lo-fi"     },
-    { maxTension: 0.35, major: "pop",      minor: "cinematic" },
+    { maxTension: 0.20, major: "acoustic", minor: "acoustic"  },
+    { maxTension: 0.35, major: "pop",      minor: "acoustic"  },
     { maxTension: 0.50, major: "pop",      minor: "jazz"      },
     { maxTension: 0.65, major: "jazz",     minor: "rock"      },
     { maxTension: 0.78, major: "rock",     minor: "cinematic" },

@@ -73,7 +73,8 @@ import {
     DEFAULT_AI_BAND_SELECTION,
     aiBandInstrumentOptions,
     arrangementPresetOptions,
-    MAX_ARRANGEMENT_CHORDS
+    MAX_ARRANGEMENT_CHORDS,
+    suggestBpmForStyle
 } from "./aiBandEngine";
 
 import { analyzeAll, mapVoiceAnalysisToSettings, startRecording, extractMelodyContour } from "./voiceAnalyzer";
@@ -90,6 +91,9 @@ const instrumentCatalog = [
     { value: "church_organ", label: "Church Organ", status: "working" },
     { value: "finger_bass", label: "Finger Bass", status: "working" },
     { value: "rock_guitar", label: "Rock Guitar", status: "working" },
+    { value: "acoustic_guitar", label: "Acoustic Guitar", status: "working" },
+    { value: "electric_guitar_clean", label: "Clean Electric Guitar", status: "working" },
+    { value: "electric_guitar_jazz", label: "Jazz Guitar", status: "working" },
     { value: "flute", label: "Flute", status: "working" },
     { value: "violin", label: "Violin", status: "working" },
     // audio.js has always had full support for "drums" (a dedicated MembraneSynth)
@@ -450,6 +454,7 @@ function App() {
   // then, a fresh import should let the theory engine auto-detect a style
   // from the song's actual harmonic content instead of forcing "pop".
   const styleManuallySetRef = useRef(false);
+  const bpmManuallySetRef = useRef(false);
   const [arrangementPreset, setArrangementPreset] = useState("radio");
   const [aiBandSelection, setAiBandSelection] = useState(DEFAULT_AI_BAND_SELECTION);
   // Once the user manually toggles an instrument on/off, style changes must stop
@@ -1035,6 +1040,7 @@ const saveTempo = async () => {
 
     setBpm(finalBpm);
     setBeatsPerBar(finalBeats);
+    bpmManuallySetRef.current = true;
 
     try {
         await apiJson("/tempo", {
@@ -2093,10 +2099,26 @@ const generateLocalBand = async (song = importedSong, style = bandStyle, statusM
     const resolvedStyle = nextTracks[0]?.theoryMeta?.resolvedStyle;
     if (resolvedStyle) setBandStyle(resolvedStyle);
 
+    // Ultimate Guitar gives us no tempo data at all -- BPM otherwise just
+    // stays at whatever it was (usually the 120 default) regardless of the
+    // actual song, which is its own way to make a correct chord chart sound
+    // wrong (a slow ballad at 120 rushes right past recognisable). This is
+    // still only a genre-shaped guess, not a measurement, so it backs off
+    // permanently the moment the user sets a real BPM themselves.
+    let suggestedBpmForMessage = null;
+    if (hasSong && resolvedStyle && !bpmManuallySetRef.current) {
+      suggestedBpmForMessage = suggestBpmForStyle(resolvedStyle);
+      setBpm(String(suggestedBpmForMessage));
+    }
+
     if (statusMessage !== undefined) {
       setImportError(statusMessage);
     } else {
-      setImportError(hasSong ? "AI arrangement generated locally." : "Demo band loaded. Paste an Ultimate Guitar URL to replace it.");
+      setImportError(hasSong
+        ? (suggestedBpmForMessage
+            ? `AI arrangement generated locally. Tempo is a ${resolvedStyle}-based guess (Ultimate Guitar doesn't include real BPM) -- tap ♩ ${suggestedBpmForMessage} below if it feels off.`
+            : "AI arrangement generated locally.")
+        : "Demo band loaded. Paste an Ultimate Guitar URL to replace it.");
     }
     preWarmSamplers(nextTracks).catch(() => {});
   } catch (error) {

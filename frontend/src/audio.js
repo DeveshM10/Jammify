@@ -58,6 +58,15 @@ const INSTRUMENT_CONFIG = {
     church_organ:         { kind: "versilian", name: "Aerophones/Edge-blown Aerophones/Pipe Organ - Loud" },
     finger_bass:          { kind: "soundfont", name: "electric_bass_finger" },
     rock_guitar:          { kind: "soundfont", name: "overdriven_guitar" },
+    // Until these existed, "rock_guitar" (overdriven_guitar) was the ONLY
+    // guitar timbre anywhere in the app -- every style preset that used a
+    // guitar at all used a distorted rock/metal patch, including "Acoustic"
+    // style and plain "Pop", which is why a soft ballad import never had a
+    // real acoustic guitar in it even when the arranger did pick a guitar
+    // role. Verified non-silent via offline render (see project history).
+    acoustic_guitar:      { kind: "soundfont", name: "acoustic_guitar_steel" },
+    electric_guitar_clean:{ kind: "soundfont", name: "electric_guitar_clean" },
+    electric_guitar_jazz: { kind: "soundfont", name: "electric_guitar_jazz" },
     // Soundfont supports two source kits: MusyngKite (default) and
     // FluidR3_GM. Measured directly (offline-rendered RMS): MusyngKite's
     // violin sample is ~3.5x quieter than every other instrument in the mix

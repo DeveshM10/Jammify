@@ -298,12 +298,20 @@ export const STYLE_PRESETS = {
     instruments: {
       bass:   "finger_bass",
       piano:  "acoustic_grand_piano",
-      rhythm: "rock_guitar",
+      // Was "rock_guitar" (overdriven_guitar) -- a full-distortion metal/rock
+      // patch playing under EVERY song this style resolves to (the most
+      // common resolved style by far) was wrong far more often than right;
+      // most pop imports aren't hard rock. Clean electric is the safer
+      // general-purpose "generic rhythm guitar" timbre.
+      rhythm: "electric_guitar_clean",
       lead:   "flute",
       pad:    "church_organ",
       vocal:  "violin"
     },
-    volumes:     { bass:0.72,          piano:0.82,                   rhythm:0.68,                  lead:0.58,         pad:0.52,             vocal:0.74      },
+    // electric_guitar_clean measures quieter than overdriven_guitar at the
+    // same velocity (offline-rendered RMS ~0.014 vs ~0.062) -- bumped to
+    // compensate so the swap doesn't make rhythm guitar disappear in the mix.
+    volumes:     { bass:0.72,          piano:0.82,                   rhythm:0.85,                  lead:0.58,         pad:0.52,             vocal:0.74      },
     colors:      { bass:"#00B894",     piano:"#6D4AFF",              rhythm:"#FDCB6E",              lead:"#FF6B8A",    pad:"#0984E3",        vocal:"#FF4D9D" },
   },
   rock: {
@@ -326,17 +334,50 @@ export const STYLE_PRESETS = {
   },
   jazz: {
     label: "Jazz",
-    instruments: { bass:"finger_bass", piano:"electric_grand_piano", rhythm:"church_organ",         lead:"rock_guitar", pad:"acoustic_grand_piano", vocal:"violin"  },
-    volumes:     { bass:0.78,          piano:0.82,                   rhythm:0.68,                  lead:0.62,         pad:0.58,             vocal:0.74     },
+    // lead was "rock_guitar" (overdriven_guitar) -- a distorted rock patch
+    // playing lead over a jazz-styled arrangement was a genre mismatch on
+    // its own, independent of the ballad-vs-guitar bug this was found
+    // alongside. electric_guitar_jazz is the real GM patch for exactly this.
+    instruments: { bass:"finger_bass", piano:"electric_grand_piano", rhythm:"church_organ",         lead:"electric_guitar_jazz", pad:"acoustic_grand_piano", vocal:"violin"  },
+    volumes:     { bass:0.78,          piano:0.82,                   rhythm:0.68,                  lead:0.78,         pad:0.58,             vocal:0.74     },
     colors:      { bass:"#34C759",     piano:"#8E7CC3",              rhythm:"#F1C40F",              lead:"#E67E22",    pad:"#5DADE2",        vocal:"#FFB703"},
   },
   acoustic: {
     label: "Acoustic",
-    instruments: { bass:"finger_bass", piano:"acoustic_grand_piano", rhythm:"rock_guitar",          lead:"flute",      pad:"church_organ",   vocal:"violin"   },
-    volumes:     { bass:0.7,           piano:0.75,                   rhythm:0.58,                  lead:0.5,          pad:0.48,             vocal:0.66      },
+    // rhythm was "rock_guitar" (overdriven_guitar) -- a style literally
+    // named "Acoustic" was playing a distorted rock guitar patch for its
+    // main guitar part. This is the instrument that should have been here
+    // from the start.
+    instruments: { bass:"finger_bass", piano:"acoustic_grand_piano", rhythm:"acoustic_guitar",      lead:"flute",      pad:"church_organ",   vocal:"violin"   },
+    // acoustic_guitar_steel measures quieter than overdriven_guitar at the
+    // same velocity (offline-rendered RMS ~0.030 vs ~0.062) -- bumped so it
+    // doesn't get buried under bass/piano.
+    volumes:     { bass:0.7,           piano:0.75,                   rhythm:0.74,                  lead:0.5,          pad:0.48,             vocal:0.66      },
     colors:      { bass:"#27AE60",     piano:"#8E44AD",              rhythm:"#F9C74F",              lead:"#FF7F50",    pad:"#4ECDC4",        vocal:"#F72585" },
   },
 };
+
+// Ultimate Guitar's chord-sheet pages carry no tempo information at all --
+// there's nothing in the scraped page to measure a real BPM from (checked
+// directly against the raw page source). Every import used to silently
+// keep whatever BPM happened to be set before (usually the 120 default),
+// regardless of the actual song -- a slow ballad played at 120 is legible
+// as "wrong" even when every chord and its timing are correct. This can't
+// give a *real* tempo, only a less-arbitrary starting point than a single
+// fixed constant for every song; the BPM control stays front-and-center
+// (the sticky bottom bar) specifically so it's a one-tap fix.
+const STYLE_DEFAULT_BPM = {
+  pop:        112,
+  rock:       124,
+  jazz:       96,
+  cinematic:  80,
+  "lo-fi":    76,
+  acoustic:   84,
+};
+
+export function suggestBpmForStyle(style) {
+  return STYLE_DEFAULT_BPM[style] || 112;
+}
 
 export const DEFAULT_AI_BAND_SELECTION = {
   bass: true, piano: true, rhythm: true,
@@ -777,6 +818,9 @@ export function buildBandFromSong(
       "church_organ": "Organ",
       "finger_bass": "Bass Guitar",
       "rock_guitar": "Rock Guitar",
+      "acoustic_guitar": "Acoustic Guitar",
+      "electric_guitar_clean": "Clean Electric Guitar",
+      "electric_guitar_jazz": "Jazz Guitar",
       "flute": "Flute",
       "violin": "Violin"
     };
