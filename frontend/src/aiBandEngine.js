@@ -457,9 +457,16 @@ function makeTrack(
 
       // ── DRUMS ────────────────────────────────────────────────────────────
       if (preset === "drums") {
+        // `name` here selects which real drum piece to hit (audio.js maps it
+        // to a real sampled kick/snare/hihat/crash), not a musical pitch --
+        // it used to always be the placeholder "C", so every single hit
+        // played the exact same sound regardless of position. A simple
+        // alternating kick/snare pulse, with crash on section-boundary fills
+        // and a snare roll for "drum-roll" fills, gives an actual basic beat
+        // instead of one note repeating.
         if (fill.type === "drum-roll") {
           return {
-            ...base, type:"note", name:"C", octave:3, beats:1,
+            ...base, type:"note", name:"snare", octave:3, beats:1,
             speed: 0.95 + energy * 0.05,
             pattern:[true,true,true,true,true,true,true,true],
             lyricHint:"drum-roll", shape:"drum-roll",
@@ -470,8 +477,9 @@ function makeTrack(
         const swingSpeed = fill.isFill
           ? 1.2 + energy * 0.3
           : (0.8 + energy * 0.45) * (1 + swingAmount * 0.1);
+        const drumVoice = fill.isFill ? "crash" : (index % 2 === 0 ? "kick" : "snare");
         return {
-          ...base, type:"note", name:"C", octave:3,
+          ...base, type:"note", name: drumVoice, octave:3,
           beats: fillWindow ? 1 : (fill.isFill ? drumBeats * 1.2 : drumBeats),
           speed: swingSpeed,
           pattern: getDrumPattern(section.name, arrangementPreset),

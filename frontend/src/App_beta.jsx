@@ -1096,7 +1096,8 @@ const playStep = async (chords, playbackId) => {
                 chord.volume,
                 chord.instrument,
                 chord.trackId,
-                Number(chord.speed ?? 1)
+                Number(chord.speed ?? 1),
+                chord.name
             );
 
         })

@@ -18,7 +18,7 @@
 // doesn't apply there).
 
 import * as Tone from "tone";
-import { Soundfont, SplendidGrandPiano, ElectricPiano, DrumMachine } from "smplr";
+import { Soundfont, SplendidGrandPiano, ElectricPiano, Versilian } from "smplr";
 
 let activeVoices = [];
 let trackGains = {};   // trackId -> native GainNode
@@ -45,11 +45,58 @@ const INSTRUMENT_CONFIG = {
     trumpet:              { kind: "soundfont", name: "trumpet" },
 };
 
-// Linn LM-2: a real sampled drum machine with a natural, "real kit" feel
-// (used on a huge amount of 80s pop/rock records) rather than an obviously
-// electronic kit like the TR-808.
-const DRUM_KIT = "LM-2";
+// Real acoustic drum kit pieces from VCSL (Versilian Community Sample
+// Library, CC0), not a synthesized/vintage drum-machine sample -- this is
+// what actually sounds like a real kit rather than a drum machine. Each
+// entry's `note` is that piece's own trigger pitch, confirmed from its SFZ
+// file (most are keycentered at MIDI 60; hi-hat is 44).
+// `volume` is smplr's 0-127 MIDI-style scale (100 = default/unity per its
+// shared API). The raw Bass Drum recording clips above full scale at default
+// volume (measured peak ~1.18 against a ceiling of 1.0), so it's turned down
+// here at the source rather than relying on the per-track gain stage, which
+// would just make the whole drum track quieter instead of fixing the clip.
+const ACOUSTIC_DRUM_PIECES = {
+    kick:  { instrument: "Membranophones/Struck Membranophones/Bass Drum 1",          note: 60, volume: 78 },
+    snare: { instrument: "Membranophones/Struck Membranophones/Snare Drum, Modern 1", note: 60 },
+    hihat: { instrument: "Idiophones/Struck Idiophones/Hi-Hat Cymbal",                note: 44 },
+    tom1:  { instrument: "Membranophones/Struck Membranophones/Tom 1",                note: 60 },
+    crash: { instrument: "Idiophones/Struck Idiophones/Clash Cymbals 1",              note: 60 },
+};
 const DRUM_DEFAULT_HIT = "kick";
+
+/*
+ * A drum "kit" isn't one instrument, it's several independent real acoustic
+ * recordings (kick, snare, hi-hat, ...) that need to be addressable by name.
+ * This builds a small object exposing the same start/stop/dispose/ready
+ * shape the rest of audio.js already expects from any instrument, backed by
+ * one Versilian (VCSL) instance per piece, each hitting its own fixed pitch.
+ */
+function createAcousticDrumKit(context, destination) {
+    const voices = {};
+    const ready = Promise.all(
+        Object.entries(ACOUSTIC_DRUM_PIECES).map(async ([name, piece]) => {
+            const voice = Versilian(context, { instrument: piece.instrument, destination, volume: piece.volume });
+            await voice.ready;
+            voices[name] = voice;
+        })
+    );
+
+    return {
+        ready,
+        start({ note, time, velocity }) {
+            const pieceName = ACOUSTIC_DRUM_PIECES[note] ? note : DRUM_DEFAULT_HIT;
+            const voice = voices[pieceName];
+            if (!voice) return;
+            voice.start({ note: ACOUSTIC_DRUM_PIECES[pieceName].note, time, velocity });
+        },
+        stop() {
+            Object.values(voices).forEach(v => v.stop());
+        },
+        dispose() {
+            Object.values(voices).forEach(v => v.dispose());
+        },
+    };
+}
 
 function getAudioContext() {
     // Read Tone's context each call rather than caching it -- Tone.start()
@@ -105,7 +152,7 @@ export async function loadInstrumentForTrack(trackId, instrument) {
     let newInstrument;
     try {
         newInstrument = safeInstrument === "drums"
-            ? DrumMachine(context, { instrument: DRUM_KIT, destination })
+            ? createAcousticDrumKit(context, destination)
             : createSmplrInstrument(INSTRUMENT_CONFIG[safeInstrument], context, destination);
         await newInstrument.ready;
     } catch (error) {
@@ -254,15 +301,23 @@ export async function playChord(
     volume = 0.8,
     instrument = "acoustic_grand_piano",
     trackId,
-    speed = 1
+    speed = 1,
+    drumHint
 ) {
 
+    const isDrums = instrument === "drums";
+
     /*
-     * Nothing to play.
+     * Nothing to play. Drums are addressed by name ("kick", "snare", ...),
+     * not by the MIDI-derived `notes` array -- upstream, a drum piece name
+     * like "snare" isn't a parseable note letter, so it converts to an empty
+     * `notes` array. That's expected for drums and must not short-circuit
+     * the hit; only bail here for melodic instruments.
      */
     if (
+        !isDrums && (
         !notes ||
-        notes.length === 0
+        notes.length === 0)
     ) {
         return;
     }
@@ -322,19 +377,15 @@ export async function playChord(
         Number(durationBeats);
 
 
-    const isDrums = instrument === "drums";
-
     /*
-     * Drums are real sampled drum-machine hits addressed by group name
-     * ("kick", "snare", ...), not by pitch -- the MIDI-number pipeline
-     * upstream doesn't carry that information yet, so every hit currently
-     * plays the same real kick sample. (Varying it per pattern subdivision
-     * -- a real kick/snare backbeat -- needs the beat scheduler in
-     * App_beta.jsx to pass through which step is firing; a good next step,
-     * not done here.)
+     * Drums are real acoustic kit pieces addressed by name ("kick", "snare",
+     * "hihat", ...) via drumHint (aiBandEngine.js sets chord.name to the
+     * piece to hit; App_beta.jsx passes it through here as drumHint since
+     * the MIDI-number pipeline can't carry a non-pitch string). Fall back to
+     * a plain kick if drumHint is missing or not a real piece name.
      */
     const noteNames = isDrums
-        ? [DRUM_DEFAULT_HIT]
+        ? [ACOUSTIC_DRUM_PIECES[drumHint] ? drumHint : DRUM_DEFAULT_HIT]
         : notes.map(midiToNote).filter(Boolean);
 
     if (noteNames.length === 0) {
