@@ -655,7 +655,7 @@ function chooseStyleLegacy(song) {
 
 export function buildBandFromSong(
   song,
-  style            = "pop",
+  style            = null,
   selection        = DEFAULT_AI_BAND_SELECTION,
   producerSettings = {},
   arrangementPreset = "radio"
@@ -683,7 +683,11 @@ export function buildBandFromSong(
   const theoryResult = analyzeProgression(chordNames);
   const { tonic, mode, confidence, analyses: chordAnalyses, pattern, modulation } = theoryResult;
 
-  // Choose style: theory-based unless caller passed an explicit valid style
+  // Choose style: theory-based unless caller passed an explicit valid style.
+  // `style` is null on a fresh import unless the user has manually picked one
+  // in the UI (see App_beta.jsx) -- previously the caller always defaulted to
+  // "pop" here, which is itself a valid STYLE_PRESETS key, so this branch's
+  // real theory-driven detection never actually ran for any imported song.
   const resolvedStyle = STYLE_PRESETS[style]
     ? style
     : chooseStyleFromAnalysis(chordAnalyses, mode) || chooseStyleLegacy(safeSong);
@@ -701,6 +705,7 @@ export function buildBandFromSong(
       ? `Modulates to ${modulation.newTonic} ${modulation.newMode} at chord ${modulation.atIndex}`
       : null,
     confidencePct: Math.round(confidence * 100),
+    resolvedStyle,
   };
 
   // Lead pattern: preserve imported durations for melody/rhythm instruments.

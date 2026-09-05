@@ -435,6 +435,10 @@ function App() {
   const [tempoDialogOpen, setTempoDialogOpen] = useState(false);
   const [beatsPerBar, setBeatsPerBar] = useState(4);
   const [bandStyle, setBandStyle] = useState("pop");
+  // True once the user explicitly picks a style from the dropdown. Until
+  // then, a fresh import should let the theory engine auto-detect a style
+  // from the song's actual harmonic content instead of forcing "pop".
+  const styleManuallySetRef = useRef(false);
   const [arrangementPreset, setArrangementPreset] = useState("radio");
   const [aiBandSelection, setAiBandSelection] = useState(DEFAULT_AI_BAND_SELECTION);
   // Once the user manually toggles an instrument on/off, style changes must stop
@@ -1986,6 +1990,10 @@ const generateLocalBand = async (song = importedSong, style = bandStyle, statusM
     setTracks(nextTracks);
     setSelectedTrack(nextTracks[0]?.id ?? null);
     setTheoryMeta(nextTracks[0]?.theoryMeta || null);
+    // Reflect whatever style the theory engine actually resolved to (auto-
+    // detected or the user's own explicit pick) back into the dropdown.
+    const resolvedStyle = nextTracks[0]?.theoryMeta?.resolvedStyle;
+    if (resolvedStyle) setBandStyle(resolvedStyle);
 
     if (statusMessage !== undefined) {
       setImportError(statusMessage);
@@ -2020,7 +2028,9 @@ async function importSong() {
     });
 
     setImportedSong(data);
-    generateLocalBand(data);
+    // Let the theory engine auto-detect style from this song's actual chords
+    // unless the user has already explicitly chosen one from the dropdown.
+    generateLocalBand(data, styleManuallySetRef.current ? bandStyle : null);
 
   } catch (error) {
     console.error(error);
@@ -2118,7 +2128,8 @@ async function importSong() {
             onChange={(e) => {
               const newStyle = e.target.value;
               setBandStyle(newStyle);
-              
+              styleManuallySetRef.current = true;
+
               // Recommend optimal band setup based on style
               const recs = {
                 pop: { bass: true, piano: true, rhythm: true, drums: true, lead: false, pad: false, vocal: false },
