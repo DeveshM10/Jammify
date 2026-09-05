@@ -89,15 +89,28 @@ function computeArrangementDensity(energy, bpm) {
  * Record from the microphone for `durationSeconds` seconds.
  * Returns a Float32Array of mono PCM samples + the sample rate.
  *
- * @param {number} durationSeconds  3-10, default 5
+ * @param {number} durationSeconds  3-240, default 5. The upper bound was 10s
+ *   (fine for a quick mood/tempo sample) until "hum the tune" needed to
+ *   capture an entire sung melody line, which can run well past that.
  * @returns {Promise<{ samples: Float32Array, sampleRate: number }>}
  */
 export async function startRecording(durationSeconds = 5) {
-  const clampedDuration = Math.min(10, Math.max(3, durationSeconds));
+  const clampedDuration = Math.min(240, Math.max(3, durationSeconds));
 
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    // Chrome's default mic constraints run voice-call processing (echo
+    // cancellation, noise suppression, auto gain control) that's tuned for
+    // speech intelligibility, not pitch fidelity -- it can dull or distort
+    // exactly the periodicity a pitch tracker depends on. Ask for raw audio.
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      },
+      video: false,
+    });
   } catch (err) {
     throw new Error(`Microphone permission denied: ${err.message}`);
   }
@@ -317,6 +330,137 @@ export function analyzePitch(samples, sampleRate) {
   const pitchClass = CHROMATIC[((midiRound % 12) + 12) % 12];
 
   return { frequency, clarity: bestClarity, pitchClass };
+}
+
+// ─── Melody Extraction (sliding-window pitch tracking) ────────────────────────
+
+/**
+ * frequencyToNote(frequency) -> { midi, name, octave }
+ * Nearest-semitone quantisation of a detected fundamental frequency.
+ */
+function frequencyToNote(frequency) {
+  const midiFloat = 69 + 12 * Math.log2(frequency / 440);
+  const midi      = Math.round(midiFloat);
+  const name      = CHROMATIC[((midi % 12) + 12) % 12];
+  const octave    = Math.floor(midi / 12) - 1;
+  return { midi, name, octave };
+}
+
+/**
+ * extractMelodyContour(samples, sampleRate, opts?) -> Array<{
+ *   midi, name, octave, startTime, duration, clarity
+ * }>
+ *
+ * analyzePitch() (above) runs the McLeod/NSDF pitch detector exactly ONCE
+ * across an entire recording, collapsing it to a single frequency -- fine
+ * for "what key is this roughly in", useless for "what tune did they hum".
+ * This slides the same NSDF detector across the recording in small hops to
+ * recover an actual note-by-note melodic contour: a real, sung/hummed
+ * melody line instead of a formula-generated one.
+ *
+ * Consecutive windows landing on the same semitone are merged into one
+ * held note; low-clarity windows (breath, silence, consonants) become
+ * gaps and end whatever note was sounding.
+ */
+export function extractMelodyContour(samples, sampleRate, opts = {}) {
+  if (!samples || samples.length === 0 || !sampleRate) return [];
+
+  const hopSeconds        = opts.hopSeconds ?? 0.05;   // 50ms between analysis windows
+  const windowSeconds     = opts.windowSeconds ?? 0.045; // ~2-3 periods at low vocal pitch
+  const minNoteSeconds    = opts.minNoteSeconds ?? 0.09; // ignore flickers shorter than this
+  const clarityThreshold  = opts.clarityThreshold ?? 0.5;
+
+  const hopSamples    = Math.max(1, Math.round(hopSeconds * sampleRate));
+  const windowSamples = Math.max(64, Math.round(windowSeconds * sampleRate));
+  const lagMin         = Math.round(sampleRate / 1200); // 1200Hz ceiling
+  const lagMax         = Math.round(sampleRate / 80);   //  80Hz floor
+
+  const frames = []; // { time, midi, name, octave, clarity } | null (unvoiced)
+
+  for (let start = 0; start + windowSamples <= samples.length; start += hopSamples) {
+    const window = samples.subarray(start, start + windowSamples);
+    if (lagMax >= window.length) break;
+
+    const nsdfResults = computeNSDF(window, lagMin, lagMax);
+
+    // Collect every local maximum above threshold, then pick the SMALLEST
+    // lag (highest frequency) whose value is close to the strongest one --
+    // not just the single strongest peak outright. A pure/near-pure tone's
+    // autocorrelation is close to self-similar at 2x and 3x its true period
+    // too, so "just take the highest peak" reliably locks onto a subharmonic
+    // (an octave, or a fifth+octave, below the real pitch) whenever that
+    // multiple happens to correlate marginally better -- this is the
+    // textbook McLeod Pitch Method octave-error, and taking the *first*
+    // "key maximum" near the global best instead of the global best itself
+    // is McLeod's own fix for it.
+    const keyMaxima = [];
+    let globalBest = 0;
+    for (let i = 1; i < nsdfResults.length - 1; i++) {
+      const { nsdf: prev } = nsdfResults[i - 1];
+      const { nsdf: curr } = nsdfResults[i];
+      const { nsdf: next } = nsdfResults[i + 1];
+      if (curr >= prev && curr >= next && curr >= clarityThreshold) {
+        keyMaxima.push({ lag: nsdfResults[i].lag, nsdf: curr });
+        if (curr > globalBest) globalBest = curr;
+      }
+    }
+
+    const OCTAVE_TOLERANCE = 0.9; // accept a smaller-lag peak within 90% of the best
+    let bestLag = null;
+    let bestClarity = 0;
+    for (const candidate of keyMaxima) {
+      if (candidate.nsdf >= globalBest * OCTAVE_TOLERANCE) {
+        bestLag = candidate.lag;
+        bestClarity = candidate.nsdf;
+        break; // keyMaxima is already in ascending-lag order
+      }
+    }
+
+    const time = start / sampleRate;
+    if (bestLag === null) {
+      frames.push(null);
+      continue;
+    }
+    const frequency = sampleRate / bestLag;
+    const { midi, name, octave } = frequencyToNote(frequency);
+    frames.push({ time, midi, name, octave, clarity: bestClarity });
+  }
+
+  // Merge consecutive same-pitch frames into held notes.
+  const notes = [];
+  let current = null;
+
+  const flush = (endTime) => {
+    if (!current) return;
+    const duration = endTime - current.startTime;
+    if (duration >= minNoteSeconds) {
+      notes.push({
+        midi: current.midi, name: current.name, octave: current.octave,
+        startTime: current.startTime, duration,
+        clarity: current.clarityMax,
+      });
+    }
+    current = null;
+  };
+
+  for (let i = 0; i < frames.length; i++) {
+    const frame = frames[i];
+    const time  = i * hopSeconds;
+
+    if (!frame) {
+      flush(time);
+      continue;
+    }
+    if (current && current.midi === frame.midi) {
+      current.clarityMax = Math.max(current.clarityMax, frame.clarity);
+      continue;
+    }
+    flush(time);
+    current = { midi: frame.midi, name: frame.name, octave: frame.octave, startTime: frame.time, clarityMax: frame.clarity };
+  }
+  flush(frames.length * hopSeconds);
+
+  return notes;
 }
 
 // ─── Full Pipeline ────────────────────────────────────────────────────────────

@@ -38,4 +38,14 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Web getUserMedia() calls (Hum to Generate, Hum the Real Tune, Live
+         Jam mic input, and the chord-chart camera scanner) need these
+         declared, or the WebView silently denies the permission prompt.
+         The web build works without them because a real browser handles
+         its own OS-level permission grant outside the app manifest. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>

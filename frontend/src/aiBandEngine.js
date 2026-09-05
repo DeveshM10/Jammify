@@ -343,7 +343,7 @@ export const DEFAULT_AI_BAND_SELECTION = {
   lead: false, pad: false, drums: true, vocal: false,
 };
 
-const MAX_ARRANGEMENT_CHORDS = 32;
+export const MAX_ARRANGEMENT_CHORDS = 32;
 
 export const aiBandInstrumentOptions = [
   { key:"bass",  label:"Bass"       },
@@ -565,10 +565,15 @@ function makeTrack(
         }
 
         const fillNote = getMelodyNoteFromScale(tonic, mode, index + 4);
+        // A real hummed note for this chord beats the invented scale-walk --
+        // fills stay generated (they're intentional embellishment around the
+        // core tune, not the tune itself).
+        const mainName  = (!fill.isFill && chord.humNote) ? chord.humNote.name   : (fill.isFill ? fillNote : resolvedMelodyNote);
+        const mainOctave= (!fill.isFill && chord.humNote) ? chord.humNote.octave : leadOctave + (fill.isFill ? 1 : 0);
         return {
           ...base, type:"note",
-          name: fill.isFill ? fillNote : resolvedMelodyNote,
-          octave: leadOctave + (fill.isFill ? 1 : 0),
+          name: mainName,
+          octave: mainOctave,
           beats: fillWindow ? 1 : (fill.isFill ? Math.max(1, Math.round(leadBeats * 0.9)) : leadBeats),
           speed: fillWindow ? Math.min(1, 1.15 + energy * 0.25)
                             : Math.min(1, leadSpeed * fill.intensity),
@@ -616,10 +621,14 @@ function makeTrack(
             ? (isCall ? 1.0 + vocalInt * 0.15 : 1.15 + vocalInt * 0.2)
             : (isCall ? 0.75 : 0.9);
 
+        // A real hummed/sung note for this chord beats the invented
+        // call/response scale-walk -- fills stay generated.
+        const vocalMainName  = (!fill.isFill && chord.humNote) ? chord.humNote.name   : (fill.isFill ? fillNote : (isCall ? callNote : responseNote));
+        const vocalMainOctave= (!fill.isFill && chord.humNote) ? chord.humNote.octave : Math.min(8, fill.isFill ? vocalOct + 1 : vocalOct);
         return {
           ...base, type:"note",
-          name: fill.isFill ? fillNote : (isCall ? callNote : responseNote),
-          octave: Math.min(8, fill.isFill ? vocalOct + 1 : vocalOct),
+          name: vocalMainName,
+          octave: vocalMainOctave,
           beats: fillWindow ? 1 : (fill.isFill ? Math.max(1, Math.round(vocalBeats * 0.8)) : vocalBeats),
           speed: fillWindow ? Math.min(1.4, 1.15 + vocalInt * 0.3)
                             : Math.min(1.4, vocalSpeed * fill.intensity),
@@ -678,7 +687,8 @@ export function buildBandFromSong(
   style            = null,
   selection        = DEFAULT_AI_BAND_SELECTION,
   producerSettings = {},
-  arrangementPreset = "radio"
+  arrangementPreset = "radio",
+  humMelody        = null, // per-chord-index {name,octave}|null from the user's own hummed performance (see App_beta.jsx handleHumTune)
 ) {
   const safeSong = (song && Array.isArray(song.chords) && song.chords.length > 0)
     ? song
@@ -696,6 +706,12 @@ export function buildBandFromSong(
       ? chord.beats : null,
     // Internal beats for section detection (unscaled)
     beats: chord.beats || (i % 4 === 0 ? 2 : 1),
+    // Real melody note for this chord slot, captured from the user humming
+    // along to the actual song -- see the LEAD/VOCAL branches in makeTrack,
+    // which use this instead of the formula-generated scale-walk whenever
+    // it's present. This is what makes the lead line actually recognisable
+    // as the song being imported, rather than a generic invented tune.
+    humNote: (humMelody && humMelody[i]) || null,
   }));
 
   // ── Theory engine ────────────────────────────────────────────────────────

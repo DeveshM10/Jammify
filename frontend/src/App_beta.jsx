@@ -72,10 +72,11 @@ import {
     styleOptions,
     DEFAULT_AI_BAND_SELECTION,
     aiBandInstrumentOptions,
-    arrangementPresetOptions
+    arrangementPresetOptions,
+    MAX_ARRANGEMENT_CHORDS
 } from "./aiBandEngine";
 
-import { analyzeAll, mapVoiceAnalysisToSettings } from "./voiceAnalyzer";
+import { analyzeAll, mapVoiceAnalysisToSettings, startRecording, extractMelodyContour } from "./voiceAnalyzer";
 import { openCamera, captureFrame, extractChords as ocrExtractChords, stopCamera } from "./cameraScanner";
 import { parseMood } from "./moodParser";
 import { queryOllama, isOllamaAvailable } from "./ollamaClient";
@@ -464,6 +465,9 @@ function App() {
 
   // ── Voice Analyzer state ────────────────────────────────────────────────
   const [voiceRecording,    setVoiceRecording]    = useState(false);
+  const [humRecording,      setHumRecording]      = useState(false);
+  const [humMelody,         setHumMelody]         = useState(null); // per-chord-index {name,octave}|null, aligned to importedSong.chords
+  const humMelodyRef = useRef(null);
   const [voiceResult,       setVoiceResult]       = useState(null);   // VoiceAnalysisResult
   const [voiceDuration,     setVoiceDuration]     = useState(5);
 
@@ -1828,6 +1832,85 @@ const applyVoiceResult = () => {
   generateLocalBand(importedSong, settings.bandStyle);
 };
 
+// ── Hum-the-tune: real melody capture ────────────────────────────────────
+// The Lead/Vocal tracks otherwise play a formula-generated "melody" (a
+// scale-degree walk keyed off chord index -- see getMelodyNoteFromScale in
+// aiBandEngine.js) that has zero relationship to the actual song's tune.
+// There's no legal source to pull a specific song's real melody from a URL,
+// but the user's own hummed/sung performance of it is real melody data we
+// can legitimately use. This records the user humming along (after a
+// count-in, at the song's own tempo, so elapsed recording time maps
+// directly onto the chord timeline), runs it through the sliding-window
+// pitch tracker in voiceAnalyzer.js, and aligns the recovered notes to
+// whichever chord was playing at that moment.
+const handleHumTune = async () => {
+  // Match aiBandEngine's own truncation: no point asking the user to sing
+  // past the point where the arranger stops reading chords anyway.
+  const referenceChords = ((importedSong?.chords?.length ? importedSong.chords : tracks[0]?.chords) || [])
+    .slice(0, MAX_ARRANGEMENT_CHORDS);
+  if (referenceChords.length === 0) {
+    setImportError("Import a song or generate a band first -- hum along to that progression.");
+    return;
+  }
+
+  const bpmNum = Number(bpm) || 120;
+  const secondsPerBeat = 60 / bpmNum;
+  const beatsArr = referenceChords.map((c) => Math.max(1, Number(c.beats) || 1));
+  const totalBeats = beatsArr.reduce((sum, b) => sum + b, 0);
+  const totalSeconds = Math.min(180, Math.max(3, totalBeats * secondsPerBeat));
+
+  setHumRecording(true);
+  setImportError(`Get ready -- count-in, then hum the tune for ~${Math.round(totalSeconds)}s.`);
+
+  try {
+    await playCountIn(bpmNum);
+    const { samples, sampleRate } = await startRecording(totalSeconds);
+    const contour = extractMelodyContour(samples, sampleRate);
+
+    // Build each chord's [start,end) time window from the same beat/tempo
+    // timeline the count-in and recording just used, then assign whichever
+    // hummed note overlaps a chord's window the most.
+    let cursorBeats = 0;
+    const aligned = beatsArr.map((beats) => {
+      const start = cursorBeats * secondsPerBeat;
+      cursorBeats += beats;
+      const end = cursorBeats * secondsPerBeat;
+
+      let best = null;
+      let bestOverlap = 0;
+      for (const note of contour) {
+        const noteEnd = note.startTime + note.duration;
+        const overlap = Math.min(end, noteEnd) - Math.max(start, note.startTime);
+        if (overlap > bestOverlap) {
+          bestOverlap = overlap;
+          best = note;
+        }
+      }
+      return best ? { name: best.name, octave: best.octave } : null;
+    });
+
+    const capturedCount = aligned.filter(Boolean).length;
+    if (capturedCount === 0) {
+      setImportError("Didn't pick up a clear melody -- try again a bit louder/closer to the mic, one note per chord.");
+    } else {
+      humMelodyRef.current = aligned;
+      setHumMelody(aligned);
+      setImportError(`Captured your melody for ${capturedCount}/${aligned.length} chords -- Lead/Vocal will use it now.`);
+      generateLocalBand(importedSong, bandStyle, `Captured your melody for ${capturedCount}/${aligned.length} chords -- Lead/Vocal will use it now.`);
+    }
+  } catch (err) {
+    setImportError(err.message || "Humming capture failed.");
+  } finally {
+    setHumRecording(false);
+  }
+};
+
+const clearHumMelody = () => {
+  humMelodyRef.current = null;
+  setHumMelody(null);
+  generateLocalBand(importedSong, bandStyle, "Cleared your hummed melody -- Lead/Vocal back to the auto-generated line.");
+};
+
 // ── Camera Scanner handlers ──────────────────────────────────────────────
 const handleOpenCamera = async () => {
   setScanResult(null);
@@ -1961,8 +2044,11 @@ const generateLocalBand = async (song = importedSong, style = bandStyle, statusM
     // key detection, no Roman numerals, naive section splitting) -- it was a
     // needless network round-trip that, when it succeeded, actually downgraded
     // the banner instead of improving it. Removed.
+    // humMelodyRef (not the humMelody state) so a capture-then-regenerate
+    // call in the same tick sees the value immediately, not a stale closure
+    // from before the state update committed.
     let nextTracks = hasSong
-      ? buildBandFromSong(activeSong, style, aiBandSelection, aiProducerSettings, arrangementPreset)
+      ? buildBandFromSong(activeSong, style, aiBandSelection, aiProducerSettings, arrangementPreset, humMelodyRef.current)
       : buildDemoBand(style, aiBandSelection, aiProducerSettings, arrangementPreset);
 
     if (!Array.isArray(nextTracks) || nextTracks.length === 0) {
@@ -2040,6 +2126,11 @@ async function importSong() {
     });
 
     setImportedSong(data);
+    // A previously-captured hum was aligned to the OLD chord timeline --
+    // carrying it over onto a different song's chords would attach the
+    // wrong note to the wrong chord, so a fresh import clears it.
+    humMelodyRef.current = null;
+    setHumMelody(null);
     // Let the theory engine auto-detect style from this song's actual chords
     // unless the user has already explicitly chosen one from the dropdown.
     generateLocalBand(data, styleManuallySetRef.current ? bandStyle : null);
@@ -2354,6 +2445,20 @@ async function importSong() {
             {voiceRecording ? `🎙️ Listening (${voiceDuration}s)…` : "🎙️ Hum to Generate"}
         </Button>
 
+        {/* Hum the real tune -- captures an actual melody (see handleHumTune)
+            and feeds it to Lead/Vocal instead of the invented scale-walk. */}
+        <Button
+            variant={humMelody ? "contained" : "outlined"}
+            size="small"
+            onClick={handleHumTune}
+            disabled={humRecording}
+            sx={{ borderRadius: 999, textTransform: "none", fontSize: 12,
+                  backgroundColor: humRecording ? colors.danger : (humMelody ? colors.success : "transparent"),
+                  borderColor: colors.border, color: (humRecording || humMelody) ? "white" : colors.text }}
+        >
+            {humRecording ? "🎤 Recording…" : (humMelody ? "🎤 Melody captured" : "🎤 Hum the Real Tune")}
+        </Button>
+
         {/* Camera Scan */}
         <Button
             variant="outlined"
@@ -2422,6 +2527,26 @@ async function importSong() {
         </Button>
       </div>
     </div>
+
+    {/* Hummed melody status chip */}
+    {humMelody && (
+        <div style={{
+            width: "100%",
+            padding: "10px 16px", borderRadius: 12,
+            background: "rgba(22,199,154,0.12)",
+            border: `1px solid ${colors.success}`,
+            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap"
+        }}>
+            <span style={{ fontSize: 13, color: colors.success, fontWeight: 700, flex: 1 }}>
+                🎤 Using your hummed melody for {humMelody.filter(Boolean).length}/{humMelody.length} chords
+            </span>
+            <Button size="small" variant="text"
+                onClick={clearHumMelody}
+                sx={{ textTransform: "none", fontSize: 11, color: colors.text }}>
+                Clear
+            </Button>
+        </div>
+    )}
 
     {/* Voice result chip */}
     {voiceResult && (
