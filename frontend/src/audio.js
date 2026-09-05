@@ -32,7 +32,10 @@ let initialized = false;
 const INSTRUMENT_CONFIG = {
     acoustic_grand_piano: { kind: "piano" },
     electric_grand_piano: { kind: "epiano",    name: "WurlitzerEP200" },
-    church_organ:         { kind: "soundfont", name: "church_organ" },
+    // A real recorded pipe organ (VCSL), not a generic GM soundfont organ
+    // patch -- same quality upgrade as the drum kit. Confirmed this SFZ maps
+    // across a full playable range (not a single fixed hit like a drum).
+    church_organ:         { kind: "versilian", name: "Aerophones/Edge-blown Aerophones/Pipe Organ - Loud" },
     finger_bass:          { kind: "soundfont", name: "electric_bass_finger" },
     rock_guitar:          { kind: "soundfont", name: "overdriven_guitar" },
     flute:                { kind: "soundfont", name: "flute" },
@@ -111,6 +114,8 @@ function createSmplrInstrument(config, context, destination) {
             return SplendidGrandPiano(context, { destination });
         case "epiano":
             return ElectricPiano(context, { instrument: config.name, destination });
+        case "versilian":
+            return Versilian(context, { instrument: config.name, destination });
         case "soundfont":
         default:
             return Soundfont(context, { instrument: config.name, destination });
