@@ -389,13 +389,16 @@ function SortableChord({
 function App() {
     
     const colors = {
-    background: "#F7F5FF",
-    primary: "#6D4AFF",
-    primaryLight: "#EDE7FF",
+    background: "#F5F0FF",
+    primary: "#7C3AED",
+    primaryLight: "#EDE4FF",
+    accent: "#FF4F93",
+    accentLight: "#FFE1ED",
+    success: "#16C79A",
     card: "#FFFFFF",
-    border: "#D8CCFF",
-    text: "#372580",
-    danger: "#FF6B8A",
+    border: "#E2D4FF",
+    text: "#241748",
+    danger: "#FF5C7C",
   };
 
   const trackColors = [
@@ -2089,7 +2092,7 @@ async function importSong() {
         letterSpacing: 0.3
       }}
     >
-      Hackathon demo: paste a song URL → generate a band → tap play
+      🎧 Paste a song link, meet your AI band, hit play
     </div>
 
     {/* ── Import Bar ──────────────────────────────────────────────────── */}
@@ -2279,7 +2282,11 @@ async function importSong() {
 
         <Button variant="contained"
           onClick={() => generateLocalBand(importedSong, bandStyle)}
-          sx={{ borderRadius:3, textTransform:"none", whiteSpace:"nowrap", backgroundColor:colors.primary }}
+          sx={{
+            borderRadius:999, textTransform:"none", whiteSpace:"nowrap", fontWeight:700,
+            background: `linear-gradient(135deg, ${colors.primary}, #A855F7)`,
+            boxShadow: `0 4px 14px ${colors.primary}44`,
+          }}
         >🤖 Generate Band</Button>
 
         <Button variant="outlined"
@@ -2666,12 +2673,16 @@ async function importSong() {
             variant="contained"
 
             sx={{
-              backgroundColor: colors.primary,
-              borderRadius: 3,
+              background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})`,
+              borderRadius: 999,
               textTransform: "none",
-              fontWeight: 600,
+              fontWeight: 700,
+              fontSize: 15,
+              px: 3.5,
+              py: 1.1,
+              boxShadow: `0 6px 18px ${colors.accent}55`,
               "&:hover": {
-                backgroundColor: "#5635E8"
+                boxShadow: `0 8px 22px ${colors.accent}77`,
               }
             }}
 
