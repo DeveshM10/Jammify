@@ -126,12 +126,41 @@ export async function loadInstrumentForTrack(trackId, instrument) {
             oscillator: { type: "sine" },
             envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4 }
         });
-        
+
         if (existing) {
             try { existing.sampler.dispose(); } catch (e) {}
         }
         trackSamplers[trackId] = { sampler: drumSynth, instrument: "drums" };
         return drumSynth;
+    }
+
+    // public/rock_guitar/*.wav are all byte-identical placeholder files that are
+    // pure digital silence (confirmed: peak -90dBFS across the entire file) --
+    // never real recordings. Loading them "succeeds" (valid WAV, no 404), so the
+    // sample-load-failure fallback below never kicks in and rock_guitar plays
+    // nothing. Until real samples replace those files, always use a synthesized
+    // voice instead of the silent sampler.
+    // Note: Tone.PluckSynth cannot be used here -- it doesn't extend Monophonic,
+    // so Tone.PolySynth(Tone.PluckSynth, ...) throws "Voice must extend
+    // Monophonic class" at construction time (this also means the pre-existing
+    // "guitar" 404 fallback further down, which has the same bug, has never
+    // actually worked either). FMSynth is Monophonic-derived and tuned here for
+    // a plucky, slightly overdriven character.
+    if (instrument === "rock_guitar") {
+        const guitarSynth = new Tone.PolySynth(Tone.FMSynth, {
+            harmonicity: 3,
+            modulationIndex: 4,
+            oscillator: { type: "triangle" },
+            modulation: { type: "square" },
+            envelope: { attack: 0.005, decay: 0.3, sustain: 0.05, release: 0.4 },
+            modulationEnvelope: { attack: 0.005, decay: 0.2, sustain: 0, release: 0.3 },
+        });
+
+        if (existing) {
+            try { existing.sampler.dispose(); } catch (e) {}
+        }
+        trackSamplers[trackId] = { sampler: guitarSynth, instrument: "rock_guitar" };
+        return guitarSynth;
     }
 
     const safeInstrument = (instrumentUrls[instrument] && baseUrls[instrument])
@@ -184,10 +213,16 @@ export async function loadInstrumentForTrack(trackId, instrument) {
                 envelope: { attack: 0.05, decay: 0.1, sustain: 0.8, release: 1 },
             });
         } else if (instrument.includes("guitar")) {
-            newSampler = new Tone.PolySynth(Tone.PluckSynth, {
-                attackNoise: 1,
-                dampening: 4000,
-                resonance: 0.7
+            // Tone.PluckSynth doesn't extend Monophonic, so wrapping it in
+            // Tone.PolySynth throws "Voice must extend Monophonic class" --
+            // use the same FMSynth voice as the rock_guitar special-case above.
+            newSampler = new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 3,
+                modulationIndex: 4,
+                oscillator: { type: "triangle" },
+                modulation: { type: "square" },
+                envelope: { attack: 0.005, decay: 0.3, sustain: 0.05, release: 0.4 },
+                modulationEnvelope: { attack: 0.005, decay: 0.2, sustain: 0, release: 0.3 },
             });
         } else if (instrument.includes("flute") || instrument.includes("violin")) {
             newSampler = new Tone.PolySynth(Tone.AMSynth, {
