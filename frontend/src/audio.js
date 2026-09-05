@@ -18,12 +18,32 @@
 // doesn't apply there).
 
 import * as Tone from "tone";
-import { Soundfont, SplendidGrandPiano, ElectricPiano, Versilian } from "smplr";
+import { Soundfont, SplendidGrandPiano, ElectricPiano, Versilian, Reverb } from "smplr";
 
 let activeVoices = [];
 let trackGains = {};   // trackId -> native GainNode
 let trackSamplers = {};
 let initialized = false;
+
+/*
+ * Every instrument is sourced from a different sample library (VCSL for
+ * drums/organ, a separate library for piano, another for guitar/bass/
+ * strings), each recorded dry or in its own room. Playing them together
+ * with zero shared ambience is part of why a full mix can sound like
+ * separately-recorded parts pasted together rather than one band in one
+ * room, even though each instrument alone is a clean real recording. One
+ * shared reverb send, lazily created once per AudioContext, gives every
+ * instrument a small amount of the same virtual space to glue the mix.
+ */
+let sharedReverb = null;
+function getSharedReverb(context) {
+    // Reverb() already defaults its own output to context.destination.
+    if (!sharedReverb) {
+        sharedReverb = Reverb(context);
+    }
+    return sharedReverb;
+}
+const REVERB_SEND_MIX = 0.16;
 
 // ─── Instrument definitions ───────────────────────────────────────────────────
 // Real General MIDI instrument names (from gleitz/midi-js-soundfonts, served
@@ -88,6 +108,7 @@ function createAcousticDrumKit(context, destination) {
         Object.entries(ACOUSTIC_DRUM_PIECES).map(async ([name, piece]) => {
             const voice = Versilian(context, { instrument: piece.instrument, destination, volume: piece.volume });
             await voice.ready;
+            await attachSharedReverb(voice, context);
             voices[name] = voice;
         })
     );
@@ -143,6 +164,30 @@ function releaseAllNotes(sampler) {
 }
 
 /*
+ * Send a slice of this instrument's signal into the one shared reverb, so
+ * every instrument gets a touch of the same virtual room instead of each
+ * sample library's own (or complete lack of) recording space.
+ *
+ * Reverb() returns immediately but loads its AudioWorklet processor
+ * asynchronously in the background; addEffect() connects to the reverb's
+ * input gain node regardless, but that gain node isn't actually routed
+ * through to the worklet (and out to the speakers) until the worklet finishes
+ * loading. Awaiting .ready() first means the connection we make is already
+ * carrying signal all the way through, instead of silently landing on a dead
+ * end for however long the worklet takes to finish loading.
+ */
+async function attachSharedReverb(instrument, context) {
+    if (!instrument.output || typeof instrument.output.addEffect !== "function") return;
+    try {
+        const reverb = getSharedReverb(context);
+        await reverb.ready();
+        instrument.output.addEffect("reverb", reverb, REVERB_SEND_MIX);
+    } catch (error) {
+        console.warn("Could not attach reverb send:", error);
+    }
+}
+
+/*
  * IMPORTANT:
  * Each TRACK gets its own sampled instrument instance, connected straight to
  * that track's own native GainNode (see getTrackGain) so per-track volume/
@@ -168,10 +213,12 @@ export async function loadInstrumentForTrack(trackId, instrument) {
             ? createAcousticDrumKit(context, destination)
             : createSmplrInstrument(INSTRUMENT_CONFIG[safeInstrument], context, destination);
         await newInstrument.ready;
+        await attachSharedReverb(newInstrument, context);
     } catch (error) {
         console.warn(`Failed to load instrument "${instrument}", falling back to piano:`, error);
         newInstrument = SplendidGrandPiano(context, { destination });
         await newInstrument.ready;
+        await attachSharedReverb(newInstrument, context);
     }
 
     // Only NOW dispose the old instrument (after the new one is ready)
@@ -315,7 +362,8 @@ export async function playChord(
     instrument = "acoustic_grand_piano",
     trackId,
     speed = 1,
-    drumHint
+    drumHint,
+    dynamics = {}
 ) {
 
     const isDrums = instrument === "drums";
@@ -418,7 +466,19 @@ export async function playChord(
             )
         );
 
-    const VELOCITY = 100;
+    /*
+     * Contextual velocity instead of a fixed one: the arrangement engine
+     * already computes per-chord tension and marks section-transition fills,
+     * but that intensity information used to be thrown away here in favor of
+     * a single hardcoded value -- every note played at identical loudness
+     * regardless of the actual music. A real player hits a tense chord or a
+     * fill harder than a calm sustained one; this makes that audible.
+     * Base 92 keeps normal passages comfortably below clipping headroom even
+     * after a tension/fill boost; clamped to smplr's 0-127 velocity range.
+     */
+    const tensionBoost = Math.round((dynamics.tensionScore ?? 0.3) * 20);
+    const fillBoost = dynamics.isFill ? 20 : 0;
+    const VELOCITY = Math.min(127, Math.max(55, 92 + tensionBoost + fillBoost));
 
     try {
 
