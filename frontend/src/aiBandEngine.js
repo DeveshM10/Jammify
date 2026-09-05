@@ -695,10 +695,20 @@ export function buildBandFromSong(
     confidencePct: Math.round(confidence * 100),
   };
 
-  // Lead pattern: preserve imported durations for melody/rhythm instruments
+  // Lead pattern: preserve imported durations for melody/rhythm instruments.
+  // IMPORTANT: keep the full chord name (via ...chord), not just its root.
+  // The "default" preset (used for the Rhythm track) and "pad" preset both
+  // read `chord.name` directly as the full chord to voice -- stripping it to
+  // a bare root here silently turned every Rhythm/Pad chord into a single
+  // note (e.g. "F#m" -> "F#", "Dsus2" -> "D", "D/F#" -> "D"), which is also
+  // exactly what the Bass track already plays (bass always reduces to its
+  // own root note independently), so Bass and Rhythm ended up playing an
+  // identical, harmonically-flattened line -- the "everything sounds like
+  // the same generic loop" symptom. Lead/Vocal/Drums don't use chord.name
+  // for their actual note at all (they compute their own melody note or
+  // ignore it entirely), so they're unaffected by keeping the full name.
   const leadPattern = songChords.map((chord, i) => ({
     ...chord,
-    name:  parseChordRoot(chord.name),
     speed: i % 2 === 0 ? 0.4 : 0.75,
   }));
 
