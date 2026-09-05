@@ -436,7 +436,6 @@ function makeTrack(
   const densityMult = 0.7 + density * 0.6;
 
   const presetConfig  = getArrangementPresetConfig(arrangementPreset);
-  const sectionBoost  = presetConfig.densityBoost || 1;
 
   // Wire vocalBoost / leadBoost into actual output volumes (previously dead code)
   const effectiveVolume = preset === "vocal"
@@ -475,10 +474,6 @@ function makeTrack(
       const chordMood       = getChordMood(chord.name || "C", chordAnalysis);
       const flavor          = getMoodFlavor(style, chord.name || "C", chordAnalysis);
 
-      const sectionBoostVal = section.name === "Chorus" ? 1.5 * sectionBoost
-        : section.name === "Bridge" ? 1.2 * sectionBoost
-        : sectionBoost;
-
       const fillWindow = (index + 1) % 4 === 0 && section.name !== "Verse";
 
       // FIXED: was (cinematic?2:2) - dead ternary. Now cinematic gets 3.
@@ -490,9 +485,24 @@ function makeTrack(
       // Preserve beat durations from imported song where available
       const importedBeats = (chord.importedBeats && chord.importedBeats > 0)
         ? chord.importedBeats : null;
-      const beatLength = importedBeats
-        ? Math.max(1, Math.round(importedBeats * densityMult))
-        : Math.max(1, Math.round(rawBeatLength * densityMult * styleDensityFactor));
+
+      // realBeats is the one thing every role's `beats` must use as-is, with
+      // no multiplier of any kind on top. It used to be routed through
+      // beatLength (importedBeats * densityMult) here, and several roles
+      // (bass, lead, pad, vocal) didn't even use beatLength -- they computed
+      // their own beats from section/style formulas with no reference to
+      // the real duration at all. Both are the same underlying mistake:
+      // every track schedules its own next-chord advance from its own
+      // `beats` value, so if one track's duration is the real 5 beats and
+      // another's is a formula-derived 1 or 2, they silently drift out of
+      // sync with each other after the very first chord -- independent of
+      // whether the real duration itself is even audible as "too fast" on
+      // its own. Duration is the one property that has to come from the
+      // real song when it's available; density/style/tension are still
+      // free to shape octave, note choice, and articulation speed *within*
+      // that real duration, just never its length.
+      const realBeats = importedBeats || rawBeatLength;
+      const beatLength = Math.max(1, Math.round(realBeats));
 
       // Tension-driven speed boost
       const tensionBoost = 1 + 0.25 * tensionScore;
@@ -554,11 +564,19 @@ function makeTrack(
       }
 
       // ── BASS ─────────────────────────────────────────────────────────────
+      // `beats` here is always the real chord duration (beatLength), never
+      // a section/density formula -- this used to be completely disconnected
+      // from the real duration (always 1-2 beats regardless of how long the
+      // actual chord holds), which meant bass raced through the real
+      // progression far faster than every other track and drifted out of
+      // sync with them almost immediately. Bass still gets its own
+      // character (walking passing tones, octave, articulation speed) --
+      // just never a different chord-change clock than everyone else.
       if (preset === "bass") {
         if (fill.type === "bass-drop") {
           return {
             ...base, name:root, inversion:0, octave:2,
-            beats: Math.max(1, Math.round(2 * densityMult)),
+            beats: beatLength,
             speed:0, wait:0.05, pattern:[true], fillType:"bass-drop",
           };
         }
@@ -578,20 +596,21 @@ function makeTrack(
         return {
           ...base, name: bassNote, inversion: index % 3 === 0 ? 0 : (index % 3),
           octave: style === "rock" ? 2 : 3,
-          beats: Math.max(1, Math.round(
-            (section.name === "Chorus" ? (style === "jazz" ? 2 : 1) : 1) * densityMult
-          )),
+          beats: beatLength,
           speed: bassSpeed * (fill.isFill ? 1.25 : 1),
           pattern:[true],
         };
       }
 
       // ── LEAD ─────────────────────────────────────────────────────────────
+      // `beats` is always beatLength (the real chord duration) -- fills
+      // used to shorten it (fillWindow / fill.isFill branches below), which
+      // desyncs lead from every other track exactly like the bass bug above,
+      // just triggered by a fill instead of happening on every chord. A fill
+      // is expressed through note choice and articulation now, never a
+      // different chord-change clock.
       if (preset === "lead") {
         const leadOctave = resolvedOctave || (section.name === "Chorus" ? 6 : 5);
-        const leadBeats  = Math.max(1, Math.round(
-          (section.name === "Chorus" ? 2 : (index % 3 === 0 ? 2 : 1)) * densityMult
-        ));
         const leadSpeed  = section.name === "Chorus"
           ? Math.min(1, (1.0 + energy * 0.2) * tensionBoost)
           : (style === "rock" ? 0.95 : 0.8);
@@ -600,7 +619,7 @@ function makeTrack(
           return {
             ...base, type:"note",
             name: getMelodyNoteFromScale(tonic, mode, index + 2),
-            octave: leadOctave, beats:1,
+            octave: leadOctave, beats: beatLength,
             speed: Math.min(1, 0.65 + energy * 0.2),
             pattern:[true], fillHint:"piano-run", isFill:true,
           };
@@ -616,7 +635,7 @@ function makeTrack(
           ...base, type:"note",
           name: mainName,
           octave: mainOctave,
-          beats: fillWindow ? 1 : (fill.isFill ? Math.max(1, Math.round(leadBeats * 0.9)) : leadBeats),
+          beats: beatLength,
           speed: fillWindow ? Math.min(1, 1.15 + energy * 0.25)
                             : Math.min(1, leadSpeed * fill.intensity),
           pattern:[true],
@@ -635,15 +654,14 @@ function makeTrack(
         return {
           ...base, name: chord.name || "C",
           octave: padOctave + (fill.isFill ? 1 : 0),
-          beats: Math.max(1, Math.round(
-            (section.name === "Chorus" ? 2 : (style === "lo-fi" ? 2 : 1)) * densityMult
-          )),
+          beats: beatLength,
           speed: Math.min(1, padSpeed * (fill.isFill ? 1.15 : 1)),
           pattern:[true],
         };
       }
 
       // ── VOCAL ────────────────────────────────────────────────────────────
+      // `beats` is always beatLength -- same fix as every other role above.
       if (preset === "vocal") {
         const phraseIndex     = Math.floor(index / 2);
         const isCall          = phraseIndex % 2 === 0;
@@ -653,10 +671,6 @@ function makeTrack(
         const isHook          = section.name === "Chorus" || (index % 4 === 0 && section.name === "Verse");
         const baseOct         = section.name === "Chorus" ? 6 : (chordMood === "dreamy" ? 5 : 4);
         const vocalOct        = isCall ? baseOct : baseOct + 1;
-        const vocalBeats      = section.name === "Chorus"
-          ? (isCall ? 2 : 1)
-          : isHook ? (isCall ? Math.max(1, Math.round(1.5 * densityMult)) : 1)
-          : Math.max(1, Math.round(densityMult));
         const vocalSpeed      = section.name === "Chorus"
           ? (isCall ? 1.1 + vocalInt * 0.2 : 1.3 + vocalInt * 0.3)
           : isHook
@@ -671,7 +685,7 @@ function makeTrack(
           ...base, type:"note",
           name: vocalMainName,
           octave: vocalMainOctave,
-          beats: fillWindow ? 1 : (fill.isFill ? Math.max(1, Math.round(vocalBeats * 0.8)) : vocalBeats),
+          beats: beatLength,
           speed: fillWindow ? Math.min(1.4, 1.15 + vocalInt * 0.3)
                             : Math.min(1.4, vocalSpeed * fill.intensity),
           wait: isCall ? 0 : 0.05,
@@ -687,23 +701,16 @@ function makeTrack(
       // organ comping doesn't strum, and forcing speed:1 (full block chord
       // per attack, see audio.js's STRUM PATTERN branch in playChord) would
       // be wrong for an instrument that was never strumming in the first
-      // place.
-      //
-      // Critically, `beats` here must be the exact REAL duration
-      // (importedBeats) strumSlots was computed against, not beatLength --
-      // beatLength already applies densityMult/style multipliers on top of
-      // the real value, and sectionBoostVal stretches it further. Scaling
-      // the scheduled duration without rescaling the slot offsets to match
-      // would spread the real per-eighth-note strum pattern across a
-      // longer-or-shorter window than it was measured for, which is
-      // exactly "the speed doesn't match the real recording" bug this
-      // feature exists to fix, reintroduced by a different multiplier.
+      // place. `beats` is beatLength either way now -- it's the same real
+      // duration strumSlots was computed against, with no multiplier
+      // stretching it afterward (sectionBoostVal used to do exactly that,
+      // same class of bug as bass/lead/pad/vocal above).
       if (role === "rhythm" && chord.strumSlots) {
         return {
           ...base,
           name: chord.name || "C",
           octave: style === "rock" ? 3 : 4,
-          beats: Math.max(1, chord.importedBeats || chord.beats || 1),
+          beats: beatLength,
           speed: 1,
           strumSlots: chord.strumSlots,
         };
@@ -715,10 +722,7 @@ function makeTrack(
         octave: section.name === "Chorus"
           ? (style === "rock" ? 4 : 5)
           : (style === "rock" ? 3 : 4),
-        beats: Math.max(1, Math.round(
-          beatLength * sectionBoostVal
-          + (index % 3 === 0 && style === "jazz" ? 1 : 0)
-        )),
+        beats: beatLength,
         speed: section.name === "Chorus"
           ? Math.min(1, 1.1 * densityMult)
           : Math.min(1, (index % 2 === 0 ? 0.7 : 1.0) * densityMult),
