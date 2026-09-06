@@ -1027,7 +1027,16 @@ const editChordData = () => {
 
 
 
-const saveTempo = async () => {
+// Tempo lives entirely client-side (playback is driven by Tone.js/smplr in
+// the browser, not the backend) -- this used to also POST to a backend
+// /tempo endpoint that stored it in a module-level Python global. That
+// endpoint never actually did anything useful (nothing ever read it back:
+// GET /tempo returned a value frozen at server startup because of how it
+// imported the global, and even if it worked, a shared global on a
+// multi-user deployed server would leak one user's tempo into everyone
+// else's requests). Removed on both ends rather than fixed in place, since
+// nothing depended on it existing.
+const saveTempo = () => {
     const finalBpm = Math.min(
         240,
         Math.max(40, Number(bpm) || 120)
@@ -1041,19 +1050,6 @@ const saveTempo = async () => {
     setBpm(finalBpm);
     setBeatsPerBar(finalBeats);
     bpmManuallySetRef.current = true;
-
-    try {
-        await apiJson("/tempo", {
-            method: "POST",
-            body: JSON.stringify({
-                bpm: finalBpm,
-                beats_per_bar: finalBeats
-            }),
-            timeoutMs: 8000,
-        });
-    } catch (error) {
-        console.warn("Tempo sync skipped:", error);
-    }
 
     setTempoDialogOpen(false);
 };

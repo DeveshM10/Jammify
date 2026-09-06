@@ -4,15 +4,10 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from metronome import set_tempo, BPM, BEATS_PER_BAR
 
 from song_chord_importer import import_chords_from_url
 from supabase_service import save_jam_to_supabase, load_jams_from_supabase
 
-
-class TempoSettings(BaseModel):
-    bpm: int
-    beats_per_bar: int
 
 class ImportChordsRequest(BaseModel):
     url: str
@@ -43,29 +38,6 @@ def root():
 @app.get("/health")
 def health():
     return {"ok": True, "service": "jammify-api"}
-
-
-@app.get("/tempo")
-def get_tempo():
-
-    return {
-        "bpm": BPM,
-        "beats_per_bar": BEATS_PER_BAR
-    }
-
-
-@app.post("/tempo")
-def update_tempo(settings: TempoSettings):
-
-    set_tempo(
-        settings.bpm,
-        settings.beats_per_bar
-    )
-
-    return {
-        "bpm": settings.bpm,
-        "beats_per_bar": settings.beats_per_bar
-    }
 
 
 @app.post("/import-chords")
