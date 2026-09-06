@@ -385,7 +385,20 @@ export const DEFAULT_AI_BAND_SELECTION = {
   lead: false, pad: false, drums: true, vocal: false,
 };
 
-export const MAX_ARRANGEMENT_CHORDS = 32;
+// This used to be 32 with no explanation anywhere in the codebase for that
+// specific number. A real song's full chord chart routinely runs well past
+// it -- Let Down's real chart is 75 chords, and 32 of them only covers the
+// first ~38 seconds (through the first Chorus) of an 87-second-plus
+// progression. Past that point the track just loops back to the
+// beginning, so any playback beyond the first Chorus was silently
+// replaying the intro while the real song moved on to a second verse, a
+// bridge, and more choruses -- a difference far bigger than any timing or
+// tone issue, and one a full side-by-side comparison against the real
+// recording catches immediately even though slicing off the first few
+// chords in a quick test (as most of this file's own verification did)
+// never would. Raised generously; still bounded so a genuinely malformed
+// scrape can't hand the arranger an unbounded array.
+export const MAX_ARRANGEMENT_CHORDS = 300;
 
 export const aiBandInstrumentOptions = [
   { key:"bass",  label:"Bass"       },
