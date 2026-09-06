@@ -387,9 +387,12 @@ export function suggestBpmForStyle(style) {
 // underneath it, so "no lead" reads as "the tune is missing" even when
 // every chord is correct. On by default now; it plays a generated line
 // unless the user captures the real one via "Hum the Real Tune".
+// Temporarily isolated to just the rhythm guitar for focused testing (per
+// Devesh: get this one instrument fully correct before re-enabling the
+// rest) -- revert to bass/piano/rhythm/lead/drums once guitar is verified.
 export const DEFAULT_AI_BAND_SELECTION = {
-  bass: true, piano: true, rhythm: true,
-  lead: true, pad: false, drums: true, vocal: false,
+  bass: false, piano: false, rhythm: true,
+  lead: false, pad: false, drums: false, vocal: false,
 };
 
 // This used to be 32 with no explanation anywhere in the codebase for that
