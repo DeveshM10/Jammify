@@ -380,9 +380,16 @@ export function suggestBpmForStyle(style) {
   return STYLE_DEFAULT_BPM[style] || 112;
 }
 
+// lead was off by default -- meaning most imports had literally no
+// single-note melodic voice anywhere in the band at all, only chordal
+// accompaniment (bass/piano/rhythm/drums). A song's actual identity --
+// its intro riff, its hook -- lives in a melody line, not in the chords
+// underneath it, so "no lead" reads as "the tune is missing" even when
+// every chord is correct. On by default now; it plays a generated line
+// unless the user captures the real one via "Hum the Real Tune".
 export const DEFAULT_AI_BAND_SELECTION = {
   bass: true, piano: true, rhythm: true,
-  lead: false, pad: false, drums: true, vocal: false,
+  lead: true, pad: false, drums: true, vocal: false,
 };
 
 // This used to be 32 with no explanation anywhere in the codebase for that
