@@ -383,16 +383,14 @@ export function suggestBpmForStyle(style) {
 // lead was off by default -- meaning most imports had literally no
 // single-note melodic voice anywhere in the band at all, only chordal
 // accompaniment (bass/piano/rhythm/drums). A song's actual identity --
-// its intro riff, its hook -- lives in a melody line, not in the chords
-// underneath it, so "no lead" reads as "the tune is missing" even when
-// every chord is correct. On by default now; it plays a generated line
-// unless the user captures the real one via "Hum the Real Tune".
-// Temporarily isolated to just the rhythm guitar for focused testing (per
-// Devesh: get this one instrument fully correct before re-enabling the
-// rest) -- revert to bass/piano/rhythm/lead/drums once guitar is verified.
+// Explicit instruction: only acoustic guitar (rhythm), acoustic piano, and
+// drums by default -- bass/lead/pad/vocal should not get added to a fresh
+// band arrangement at all. See the PINNED_*_INSTRUMENT constants below for
+// the matching fix that keeps piano/rhythm's actual *timbre* fixed too,
+// regardless of which style gets resolved.
 export const DEFAULT_AI_BAND_SELECTION = {
-  bass: false, piano: false, rhythm: true,
-  lead: false, pad: false, drums: false, vocal: false,
+  bass: false, piano: true, rhythm: true,
+  lead: false, pad: false, drums: true, vocal: false,
 };
 
 // This used to be 32 with no explanation anywhere in the codebase for that
@@ -968,17 +966,28 @@ export function buildBandFromSong(
     return labels[instrument] || instrument.replace(/_/g, ' ');
   };
 
+  // Piano and rhythm-guitar are pinned to fixed, real acoustic timbres --
+  // acoustic_grand_piano and acoustic_guitar -- regardless of which style
+  // gets resolved, per explicit instruction: no swapping in rock_guitar,
+  // electric_guitar_clean, church_organ, etc. for these two roles. Style
+  // still shapes volume/color/arrangement feel, just never which sampled
+  // instrument plays. Bass/lead/pad/vocal are unaffected (and off by
+  // default -- see DEFAULT_AI_BAND_SELECTION) since nothing was said about
+  // constraining those specifically.
+  const PINNED_PIANO_INSTRUMENT   = "acoustic_grand_piano";
+  const PINNED_RHYTHM_INSTRUMENT  = "acoustic_guitar";
+
   if (enabled.bass)   tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.bass),   stylePreset.instruments.bass,   stylePreset.volumes.bass,   songChords,  stylePreset.colors.bass,  "bass",   "bass"),   theoryMeta });
-  if (enabled.piano)  tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.piano),  stylePreset.instruments.piano,  stylePreset.volumes.piano,  songChords,  stylePreset.colors.piano, "default","piano"),theoryMeta });
-  if (enabled.rhythm) tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.rhythm), stylePreset.instruments.rhythm, stylePreset.volumes.rhythm, leadPattern, stylePreset.colors.rhythm,"default","rhythm"),theoryMeta });
+  if (enabled.piano)  tracks.push({ ...common(getInstrumentLabel(PINNED_PIANO_INSTRUMENT),  PINNED_PIANO_INSTRUMENT,  stylePreset.volumes.piano,  songChords,  stylePreset.colors.piano, "default","piano"),theoryMeta });
+  if (enabled.rhythm) tracks.push({ ...common(getInstrumentLabel(PINNED_RHYTHM_INSTRUMENT), PINNED_RHYTHM_INSTRUMENT, stylePreset.volumes.rhythm, leadPattern, stylePreset.colors.rhythm,"default","rhythm"),theoryMeta });
   if (enabled.drums)  tracks.push({ ...common("Drums", "drums",       stylePreset.volumes.rhythm * 1.1, leadPattern, "#E17055", "drums",  "drums"),  theoryMeta });
   if (enabled.lead)   tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.lead),   stylePreset.instruments.lead,   stylePreset.volumes.lead,   leadPattern, stylePreset.colors.lead,  "lead",   "lead"),   theoryMeta });
   if (enabled.pad)    tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.pad),    stylePreset.instruments.pad,    stylePreset.volumes.pad,    leadPattern, stylePreset.colors.pad,   "pad",    "pad"),    theoryMeta });
   if (enabled.vocal)  tracks.push({ ...common(getInstrumentLabel(stylePreset.instruments.vocal),  stylePreset.instruments.vocal,  stylePreset.volumes.vocal,  leadPattern, stylePreset.colors.vocal, "vocal",  "vocal"),  theoryMeta });
 
   if (tracks.length === 0) {
-    tracks.push({ ...common("Bass Guitar",    stylePreset.instruments.bass,  stylePreset.volumes.bass,  songChords, stylePreset.colors.bass,  "bass",   "bass"),   theoryMeta });
-    tracks.push({ ...common("Acoustic Piano", stylePreset.instruments.piano, stylePreset.volumes.piano, songChords, stylePreset.colors.piano, "default","piano"),theoryMeta });
+    tracks.push({ ...common(getInstrumentLabel(PINNED_RHYTHM_INSTRUMENT), PINNED_RHYTHM_INSTRUMENT, stylePreset.volumes.rhythm, leadPattern, stylePreset.colors.rhythm, "default", "rhythm"), theoryMeta });
+    tracks.push({ ...common(getInstrumentLabel(PINNED_PIANO_INSTRUMENT),  PINNED_PIANO_INSTRUMENT,  stylePreset.volumes.piano,  songChords,  stylePreset.colors.piano,  "default", "piano"),  theoryMeta });
   }
 
   return tracks;

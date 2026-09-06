@@ -2301,13 +2301,17 @@ async function importSong() {
               // melodic voice in the band at all (see
               // DEFAULT_AI_BAND_SELECTION in aiBandEngine.js for the same
               // fix applied to the pre-any-style-pick default).
+              // Every style recommends the same guitar+piano+drums set now --
+              // explicit instruction: bass/lead/pad/vocal shouldn't get
+              // added to a fresh arrangement at all, from any style pick,
+              // matching DEFAULT_AI_BAND_SELECTION in aiBandEngine.js.
               const recs = {
-                pop: { bass: true, piano: true, rhythm: true, drums: true, lead: true, pad: false, vocal: false },
-                rock: { bass: true, piano: false, rhythm: true, drums: true, lead: true, pad: false, vocal: false },
-                jazz: { bass: true, piano: true, rhythm: false, drums: true, lead: true, pad: false, vocal: false },
-                cinematic: { bass: true, piano: false, rhythm: true, drums: false, lead: true, pad: true, vocal: false },
-                "lo-fi": { bass: true, piano: true, rhythm: false, drums: true, lead: true, pad: false, vocal: false },
-                acoustic: { bass: true, piano: false, rhythm: true, drums: false, lead: true, pad: false, vocal: false },
+                pop: { bass: false, piano: true, rhythm: true, drums: true, lead: false, pad: false, vocal: false },
+                rock: { bass: false, piano: true, rhythm: true, drums: true, lead: false, pad: false, vocal: false },
+                jazz: { bass: false, piano: true, rhythm: true, drums: true, lead: false, pad: false, vocal: false },
+                cinematic: { bass: false, piano: true, rhythm: true, drums: true, lead: false, pad: false, vocal: false },
+                "lo-fi": { bass: false, piano: true, rhythm: true, drums: true, lead: false, pad: false, vocal: false },
+                acoustic: { bass: false, piano: true, rhythm: true, drums: true, lead: false, pad: false, vocal: false },
               };
               // Only auto-apply the recommendation if the user hasn't manually
               // customised their band selection yet -- otherwise this would
