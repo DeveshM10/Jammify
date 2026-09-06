@@ -408,14 +408,14 @@ export const DEFAULT_AI_BAND_SELECTION = {
 // scrape can't hand the arranger an unbounded array.
 export const MAX_ARRANGEMENT_CHORDS = 300;
 
+// Bass/Lead/Pad/Vocal removed from the selectable options entirely, not
+// just defaulted off -- explicit instruction was "remove others, I don't
+// want them to get added," and leaving them present as unchecked boxes
+// still means they could get checked back on by accident.
 export const aiBandInstrumentOptions = [
-  { key:"bass",  label:"Bass"       },
   { key:"piano", label:"Piano"      },
   { key:"rhythm",label:"Rhythm"     },
-  { key:"lead",  label:"Lead"       },
-  { key:"pad",   label:"Pad"        },
   { key:"drums", label:"Drums"      },
-  { key:"vocal", label:"Mic / Vocal"},
 ];
 
 export const arrangementPresetOptions = [
