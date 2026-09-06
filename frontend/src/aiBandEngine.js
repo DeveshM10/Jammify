@@ -809,15 +809,27 @@ export function buildBandFromSong(
     humNote: (humMelody && humMelody[i]) || null,
   }));
 
-  // Real per-eighth/sixteenth-note strum timing, when Ultimate Guitar has a
-  // community-contributed strumming pattern for this song (see
-  // song_chord_importer.py's extract_song_metadata). Attack direction
-  // (down/up) isn't part of this -- that's just standard alternating
-  // strokes, universal guitar technique -- but which slots re-strike vs.
-  // let the previous chord ring (the confirmed "downbeat sustain" rule,
-  // verified against real data, not guessed) genuinely varies per song and
-  // is worth carrying through. Only the rhythm-guitar role uses this (see
-  // the "rhythm" branch below) -- piano/organ comping doesn't strum.
+  // Real strum timing, when Ultimate Guitar has a community-contributed
+  // strumming pattern for this song (see song_chord_importer.py's
+  // extract_song_metadata). Only the rhythm-guitar role uses this (see the
+  // "rhythm" branch below) -- piano/organ comping doesn't strum.
+  //
+  // This used to sample the pattern at its full eighth/sixteenth-note
+  // resolution -- literally one full-chord re-attack per subdivision slot.
+  // Measured what that actually produces (Playwright + real scheduling
+  // math): a 2-beat chord at a slow 71bpm ballad tempo fired 32 note-starts
+  // in 1.7 seconds, a full re-strike every ~211ms, continuously, for every
+  // chord in the song regardless of tempo or style. That's a rapid,
+  // machine-gun flutter, not a strum -- audibly, obviously different from
+  // both the real recording and Ultimate Guitar's own demo, which is
+  // exactly the "the sound changes" symptom this caused. The only rule
+  // about these codes that was ever actually confirmed against real data
+  // was "3 = let the previous strike ring through, always on a downbeat" --
+  // treating every OTHER subdivision as an equally real, equally audible
+  // attack was an unverified assumption riding along with it, and it was
+  // wrong. Sampling one attack per real beat instead -- still applying the
+  // confirmed sustain rule at that same beat -- keeps the one thing that
+  // was actually verified and drops the part that wasn't.
   //
   // Patterns are keyed by section (Verse/Chorus/Bridge/"default") because a
   // song can genuinely use a different pattern -- and a different real bar
@@ -825,9 +837,8 @@ export function buildBandFromSong(
   // as a 5-beat pattern "superimposed over 4/4" while its Chorus is a plain
   // 4-beat pattern. Phase resets whenever a chord switches to a pattern
   // different from the one before it -- picking up mid-cycle from an
-  // unrelated pattern (e.g. Chorus's 4-beat cycle) at a leftover Verse
-  // phase (from a 5-beat cycle) would misalign the downbeat instead of
-  // preserving it.
+  // unrelated pattern at a leftover phase would misalign the downbeat
+  // instead of preserving it.
   const strumPatternsBySection = safeSong.strumPatterns || {};
 
   const patternForSection = (section) =>
@@ -836,7 +847,7 @@ export function buildBandFromSong(
     null;
 
   {
-    let phase = 0;
+    let phase = 0; // tracked in the pattern's own subdivision units, so the confirmed downbeat alignment still lines up correctly
     let lastPattern = null;
     songChords.forEach((chord) => {
       const pattern = patternForSection(chord.section);
@@ -849,14 +860,29 @@ export function buildBandFromSong(
         lastPattern = pattern;
       }
       const template = pattern.attacks;
-      const slotsPerBeat = pattern.slotsPerBeat || 2;
-      const beats = chord.importedBeats || chord.beats || 1;
-      const numSlots = Math.max(1, Math.round(beats * slotsPerBeat));
-      chord.strumSlots = Array.from({ length: numSlots }, (_, i) => ({
-        offsetFraction: i / numSlots,
-        attack: template[(phase + i) % template.length],
-      }));
-      phase = (phase + numSlots) % template.length;
+      const slotsPerBeat = Math.max(1, Math.round(pattern.slotsPerBeat || 2));
+      const beats = Math.max(1, Math.round(chord.importedBeats || chord.beats || 1));
+      // One slot per real BEAT, not per fine subdivision -- but sampling
+      // only the beat's own first sub-slot was a second bug: the confirmed
+      // sustain rule always lands exactly on that first sub-slot (that's
+      // the literal definition of "downbeat"), so every beat sampled as
+      // "sustain" and a chord like Hey Jude's 3-beat F never got struck at
+      // all. What "3 = sustain the downbeat" actually describes is a chord
+      // struck just *before* the beat and left ringing through it -- the
+      // beat still has real strumming activity, just not exactly on that
+      // one tick. A beat counts as a real attack if ANY of its sub-slots
+      // do, which correctly gives Hey Jude's F a strike each beat (matching
+      // its real continuous strum) while Bohemian Rhapsody's pattern (no
+      // sustain codes at all) is unaffected either way.
+      chord.strumSlots = Array.from({ length: beats }, (_, i) => {
+        const start = (phase + i * slotsPerBeat) % template.length;
+        let attack = false;
+        for (let s = 0; s < slotsPerBeat; s++) {
+          if (template[(start + s) % template.length]) { attack = true; break; }
+        }
+        return { offsetFraction: i / beats, attack };
+      });
+      phase = (phase + beats * slotsPerBeat) % template.length;
     });
   }
 
